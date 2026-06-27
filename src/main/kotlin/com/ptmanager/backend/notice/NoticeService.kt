@@ -4,7 +4,6 @@ import com.ptmanager.backend.domain.Notice
 import com.ptmanager.backend.repository.NoticeRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.util.NoSuchElementException
 
 @Service
@@ -26,7 +25,6 @@ class NoticeService(
             authorId = authorId,
             title = title,
             body = body,
-            createdAt = Instant.now(),
         )
         return noticeRepository.save(notice)
     }

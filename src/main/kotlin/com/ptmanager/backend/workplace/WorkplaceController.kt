@@ -1,10 +1,10 @@
 package com.ptmanager.backend.workplace
 
 import com.ptmanager.backend.domain.Workplace
-import com.ptmanager.backend.labor.LaborCostReport
-import com.ptmanager.backend.labor.LaborCostService
+import com.ptmanager.backend.payroll.LaborCostService
+import com.ptmanager.backend.payroll.dto.LaborCostReport
+import com.ptmanager.backend.workplace.dto.CreateWorkplaceRequest
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
@@ -38,9 +38,4 @@ class WorkplaceController(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
     ): LaborCostReport = laborCostService.calculate(id, from, to)
-
-    data class CreateWorkplaceRequest(
-        @field:NotBlank val name: String,
-        val address: String?,
-    )
 }

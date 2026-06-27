@@ -31,6 +31,7 @@ class DataSeeder(
         val employee = userRepository.save(
             User(
                 email = "employee@ptmanager.test",
+                password = "password",
                 name = "Kim Employee",
                 role = UserRole.EMPLOYEE,
                 workplaceId = workplace.id,
@@ -40,6 +41,7 @@ class DataSeeder(
         userRepository.save(
             User(
                 email = "employer@ptmanager.test",
+                password = "password",
                 name = "Park Employer",
                 role = UserRole.EMPLOYER,
                 workplaceId = workplace.id,
@@ -55,7 +57,6 @@ class DataSeeder(
                 workDate = today,
                 startTime = LocalTime.of(9, 0),
                 endTime = LocalTime.of(14, 0),
-                checkedIn = false,
             ),
         )
         shiftRepository.save(
@@ -65,7 +66,6 @@ class DataSeeder(
                 workDate = today.plusDays(1),
                 startTime = LocalTime.of(14, 0),
                 endTime = LocalTime.of(20, 0),
-                checkedIn = false,
             ),
         )
     }

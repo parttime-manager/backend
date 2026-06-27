@@ -1,4 +1,4 @@
-package com.ptmanager.backend.labor
+package com.ptmanager.backend.payroll.dto
 
 import java.time.LocalDate
 

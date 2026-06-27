@@ -1,9 +1,8 @@
 package com.ptmanager.backend.auth
 
-import com.ptmanager.backend.domain.User
+import com.ptmanager.backend.auth.dto.LoginRequest
+import com.ptmanager.backend.auth.dto.LoginResponse
 import jakarta.validation.Valid
-import jakarta.validation.constraints.Email
-import jakarta.validation.constraints.NotBlank
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -20,14 +19,4 @@ class AuthController(
         val user = authService.login(request.email, request.password)
         return LoginResponse("dev-token-" + user.id, user)
     }
-
-    data class LoginRequest(
-        @field:Email @field:NotBlank val email: String,
-        @field:NotBlank val password: String,
-    )
-
-    data class LoginResponse(
-        val accessToken: String,
-        val user: User,
-    )
 }

@@ -1,6 +1,7 @@
-package com.ptmanager.backend.labor
+package com.ptmanager.backend.payroll
 
-import com.ptmanager.backend.labor.LaborCostReport.EmployeeCost
+import com.ptmanager.backend.payroll.dto.LaborCostReport
+import com.ptmanager.backend.payroll.dto.LaborCostReport.EmployeeCost
 import com.ptmanager.backend.repository.ShiftRepository
 import com.ptmanager.backend.repository.UserRepository
 import com.ptmanager.backend.repository.WorkplaceRepository

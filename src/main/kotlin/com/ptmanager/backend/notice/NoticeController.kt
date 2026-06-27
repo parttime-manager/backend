@@ -1,8 +1,8 @@
 package com.ptmanager.backend.notice
 
 import com.ptmanager.backend.domain.Notice
+import com.ptmanager.backend.notice.dto.CreateNoticeRequest
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -30,11 +30,4 @@ class NoticeController(
     @ResponseStatus(HttpStatus.CREATED)
     fun createNotice(@Valid @RequestBody request: CreateNoticeRequest): Notice =
         noticeService.create(request.workplaceId, request.authorId, request.title, request.body)
-
-    data class CreateNoticeRequest(
-        val workplaceId: Long,
-        val authorId: Long,
-        @field:NotBlank val title: String,
-        @field:NotBlank val body: String,
-    )
 }

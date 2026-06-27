@@ -1,4 +1,4 @@
-package com.ptmanager.backend.join
+package com.ptmanager.backend.joinrequest
 
 import com.ptmanager.backend.domain.JoinRequest
 import com.ptmanager.backend.domain.JoinRequestStatus
@@ -9,7 +9,6 @@ import com.ptmanager.backend.repository.UserRepository
 import com.ptmanager.backend.repository.WorkplaceRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.util.NoSuchElementException
 
 @Service
@@ -34,7 +33,6 @@ class JoinRequestService(
             workplaceId = workplace.id!!,
             userId = userId,
             status = JoinRequestStatus.PENDING,
-            createdAt = Instant.now(),
         )
         return joinRequestRepository.save(request)
     }

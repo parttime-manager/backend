@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.hibernate.annotations.CreationTimestamp
 import java.time.Instant
 
 @Entity
@@ -22,15 +23,22 @@ class Notification(
     var userId: Long = 0,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 24)
     var type: NotificationType = NotificationType.NOTICE,
 
     @Column(nullable = false)
     var message: String = "",
 
+    @Column(name = "target_type", length = 24)
+    var targetType: String? = null,
+
+    @Column(name = "target_id")
+    var targetId: Long? = null,
+
     @Column(name = "is_read", nullable = false)
     var read: Boolean = false,
 
-    @Column(name = "created_at", nullable = false)
-    var createdAt: Instant = Instant.EPOCH,
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    var createdAt: Instant? = null,
 )

@@ -53,7 +53,7 @@ class BaselineApiTests {
                     """
                     {
                       "requesterId": 1,
-                      "workDate": "2026-06-25",
+                      "shiftId": 1,
                       "reason": "Personal schedule"
                     }
                     """.trimIndent(),

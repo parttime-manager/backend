@@ -5,7 +5,6 @@ import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.repository.NotificationRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.util.NoSuchElementException
 
 @Service
@@ -23,7 +22,6 @@ class NotificationService(
             type = type,
             message = message,
             read = false,
-            createdAt = Instant.now(),
         )
         return notificationRepository.save(notification)
     }

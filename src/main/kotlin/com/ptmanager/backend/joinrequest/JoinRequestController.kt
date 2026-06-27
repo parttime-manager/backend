@@ -1,9 +1,9 @@
-package com.ptmanager.backend.join
+package com.ptmanager.backend.joinrequest
 
 import com.ptmanager.backend.domain.JoinRequest
-import com.ptmanager.backend.domain.JoinRequestStatus
+import com.ptmanager.backend.joinrequest.dto.CreateJoinRequest
+import com.ptmanager.backend.joinrequest.dto.UpdateJoinRequestStatus
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -35,13 +35,4 @@ class JoinRequestController(
         @PathVariable id: Long,
         @Valid @RequestBody request: UpdateJoinRequestStatus,
     ): JoinRequest = joinRequestService.updateStatus(id, request.status)
-
-    data class CreateJoinRequest(
-        @field:NotBlank val inviteCode: String,
-        val userId: Long,
-    )
-
-    data class UpdateJoinRequestStatus(
-        val status: JoinRequestStatus,
-    )
 }

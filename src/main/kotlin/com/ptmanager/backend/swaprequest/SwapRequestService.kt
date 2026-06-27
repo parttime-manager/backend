@@ -1,46 +1,36 @@
-package com.ptmanager.backend.swap
+package com.ptmanager.backend.swaprequest
 
 import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.domain.SwapRequest
 import com.ptmanager.backend.domain.SwapRequestStatus
 import com.ptmanager.backend.notification.NotificationService
+import com.ptmanager.backend.repository.ShiftRepository
 import com.ptmanager.backend.repository.SwapRequestRepository
-import com.ptmanager.backend.repository.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
-import java.time.LocalDate
 import java.util.NoSuchElementException
 
 @Service
 class SwapRequestService(
     private val swapRequestRepository: SwapRequestRepository,
-    private val userRepository: UserRepository,
+    private val shiftRepository: ShiftRepository,
     private val notificationService: NotificationService,
 ) {
 
     fun findSwapRequests(): List<SwapRequest> = swapRequestRepository.findAllByOrderByCreatedAtDesc()
 
     @Transactional
-    fun createSwapRequest(
-        requesterId: Long,
-        substituteId: Long?,
-        workDate: LocalDate,
-        reason: String,
-    ): SwapRequest {
-        val requester = userRepository.findById(requesterId)
-            .orElseThrow { NoSuchElementException("Requester not found.") }
-        if (substituteId != null && !userRepository.existsById(substituteId)) {
-            throw NoSuchElementException("Substitute user not found.")
-        }
+    fun createSwapRequest(requesterId: Long, shiftId: Long, reason: String): SwapRequest {
+        val shift = shiftRepository.findById(shiftId)
+            .orElseThrow { NoSuchElementException("Shift not found.") }
+        require(shift.employeeId == requesterId) { "Can only request a swap for your own shift." }
+
         val request = SwapRequest(
-            workplaceId = requester.workplaceId ?: 0,
+            workplaceId = shift.workplaceId,
+            shiftId = shiftId,
             requesterId = requesterId,
-            substituteId = substituteId,
-            workDate = workDate,
             reason = reason,
             status = SwapRequestStatus.PENDING,
-            createdAt = Instant.now(),
         )
         return swapRequestRepository.save(request)
     }
