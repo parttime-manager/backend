@@ -5,10 +5,12 @@ import com.ptmanager.backend.domain.UserRole
 import com.ptmanager.backend.domain.Workplace
 import com.ptmanager.backend.workplace.dto.CreateWorkplaceRequest
 import com.ptmanager.backend.workplace.dto.QrTokenResponse
+import com.ptmanager.backend.workplace.dto.UpdateWageRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -43,4 +45,12 @@ class WorkplaceController(
     @PreAuthorize("hasRole('EMPLOYER')")
     fun qrToken(@PathVariable workplaceId: Long): QrTokenResponse =
         QrTokenResponse(workplaceService.issueQrToken(workplaceId))
+
+    @PatchMapping("/{workplaceId}/members/{userId}/wage")
+    @PreAuthorize("hasRole('EMPLOYER')")
+    fun updateMemberWage(
+        @PathVariable workplaceId: Long,
+        @PathVariable userId: Long,
+        @Valid @RequestBody request: UpdateWageRequest,
+    ): User = workplaceService.updateMemberWage(workplaceId, userId, request.hourlyWage)
 }

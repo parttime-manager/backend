@@ -2,12 +2,15 @@ package com.ptmanager.backend.payroll
 
 import com.ptmanager.backend.payroll.dto.PayrollItem
 import com.ptmanager.backend.payroll.dto.PayrollSummary
+import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 import java.time.YearMonth
+import java.time.format.DateTimeParseException
 
 @RestController
 @RequestMapping("/api/payroll")
@@ -22,7 +25,11 @@ class PayrollController(
         @RequestParam workplaceId: Long,
         @RequestParam yearMonth: String,
     ): PayrollSummary {
-        val ym = YearMonth.parse(yearMonth)
+        val ym = try {
+            YearMonth.parse(yearMonth)
+        } catch (ex: DateTimeParseException) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "yearMonth 형식이 올바르지 않습니다 (YYYY-MM).")
+        }
         val report = laborCostService.calculate(workplaceId, ym.atDay(1), ym.atEndOfMonth())
         val items = report.employees.map {
             PayrollItem(

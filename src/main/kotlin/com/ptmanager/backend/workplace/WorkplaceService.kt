@@ -41,6 +41,20 @@ class WorkplaceService(
         }
     }
 
+    /** 매장 멤버의 시급을 설정한다. (사장) */
+    @Transactional
+    fun updateMemberWage(workplaceId: Long, userId: Long, hourlyWage: Int): User {
+        accessGuard.requireMemberOf(workplaceId)
+        val user = userRepository.findById(userId)
+            .orElseThrow { NoSuchElementException("User not found.") }
+        // 해당 매장 소속 멤버가 아니면 존재를 숨긴다.
+        if (user.workplaceId != workplaceId) {
+            throw NoSuchElementException("User not found.")
+        }
+        user.hourlyWage = hourlyWage
+        return userRepository.save(user)
+    }
+
     @Transactional
     fun createWorkplace(name: String, address: String?): Workplace {
         val workplace = workplaceRepository.save(

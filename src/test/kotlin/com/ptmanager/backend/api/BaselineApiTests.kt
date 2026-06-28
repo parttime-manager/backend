@@ -135,7 +135,13 @@ class BaselineApiTests {
 
     @Test
     fun employerCanCreateWorkplace() {
-        val token = loginAs("employer@ptmanager.test")
+        // 시드 사장(매장1)을 옮기지 않도록 새 사장으로 생성한다.
+        val signup = mockMvc.perform(
+            post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"email":"createboss@ptmanager.test","password":"password1","name":"생성사장","role":"EMPLOYER"}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString
+        val token: String = JsonPath.read(signup, "$.accessToken")
         mockMvc.perform(
             post("/api/workplaces")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
@@ -144,6 +150,32 @@ class BaselineApiTests {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.inviteCode").exists())
+    }
+
+    @Test
+    fun employerCanSetMemberWage() {
+        val token = loginAs("employer@ptmanager.test") // 매장1 사장
+        mockMvc.perform(
+            patch("/api/workplaces/1/members/1/wage")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"hourlyWage":11000}"""),
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.hourlyWage", `is`(11000)))
+            .andExpect(jsonPath("$.password").doesNotExist())
+    }
+
+    @Test
+    fun employeeCannotSetWage() {
+        val token = loginAs("employee@ptmanager.test")
+        mockMvc.perform(
+            patch("/api/workplaces/1/members/1/wage")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"hourlyWage":11000}"""),
+        )
+            .andExpect(status().isForbidden)
     }
 
     @Test
