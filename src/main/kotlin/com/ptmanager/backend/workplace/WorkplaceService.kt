@@ -1,5 +1,6 @@
 package com.ptmanager.backend.workplace
 
+import com.ptmanager.backend.common.access.WorkplaceAccessGuard
 import com.ptmanager.backend.domain.User
 import com.ptmanager.backend.domain.UserRole
 import com.ptmanager.backend.domain.Workplace
@@ -14,23 +15,35 @@ import java.util.NoSuchElementException
 class WorkplaceService(
     private val workplaceRepository: WorkplaceRepository,
     private val userRepository: UserRepository,
+    private val accessGuard: WorkplaceAccessGuard,
 ) {
 
-    fun getWorkplace(id: Long): Workplace =
-        workplaceRepository.findById(id)
+    fun getWorkplace(id: Long): Workplace {
+        accessGuard.requireMemberOf(id)
+        return workplaceRepository.findById(id)
             .orElseThrow { NoSuchElementException("Workplace not found.") }
+    }
 
-    fun findMembers(workplaceId: Long, role: UserRole?): List<User> =
-        if (role == null) {
+    fun findMembers(workplaceId: Long, role: UserRole?): List<User> {
+        accessGuard.requireMemberOf(workplaceId)
+        return if (role == null) {
             userRepository.findByWorkplaceId(workplaceId)
         } else {
             userRepository.findByWorkplaceIdAndRole(workplaceId, role)
         }
+    }
 
     @Transactional
     fun createWorkplace(name: String, address: String?): Workplace {
-        val workplace = Workplace(name = name, address = address, inviteCode = generateUniqueInviteCode())
-        return workplaceRepository.save(workplace)
+        val workplace = workplaceRepository.save(
+            Workplace(name = name, address = address, inviteCode = generateUniqueInviteCode()),
+        )
+        // 생성자는 해당 매장에 소속된다.
+        val creator = userRepository.findById(accessGuard.currentUserId())
+            .orElseThrow { NoSuchElementException("User not found.") }
+        creator.workplaceId = workplace.id
+        userRepository.save(creator)
+        return workplace
     }
 
     private fun generateUniqueInviteCode(): String {

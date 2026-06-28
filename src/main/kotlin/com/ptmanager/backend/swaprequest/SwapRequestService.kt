@@ -1,5 +1,6 @@
 package com.ptmanager.backend.swaprequest
 
+import com.ptmanager.backend.common.access.WorkplaceAccessGuard
 import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.domain.Shift
 import com.ptmanager.backend.domain.SwapApplication
@@ -26,6 +27,7 @@ class SwapRequestService(
     private val shiftRepository: ShiftRepository,
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
+    private val accessGuard: WorkplaceAccessGuard,
 ) {
 
     @Transactional
@@ -66,6 +68,7 @@ class SwapRequestService(
         currentUserId: Long,
         status: SwapRequestStatus?,
     ): List<SwapRequest> {
+        accessGuard.requireMemberOf(workplaceId)
         val all = swapRequestRepository.findByWorkplaceIdOrderByCreatedAtDesc(workplaceId)
         return when (view) {
             "open" -> all.filter { it.status == SwapRequestStatus.PENDING && it.requesterId != currentUserId }
@@ -79,13 +82,18 @@ class SwapRequestService(
     fun getDetail(id: Long): SwapRequestDetail {
         val request = swapRequestRepository.findById(id)
             .orElseThrow { NoSuchElementException("Swap request not found.") }
+        accessGuard.requireMemberOf(request.workplaceId)
         val shift = shiftRepository.findById(request.shiftId).orElse(null)
         val applications = swapApplicationRepository.findBySwapRequestId(id)
         return SwapRequestDetail(request, shift, applications)
     }
 
-    fun listApplications(swapRequestId: Long): List<SwapApplication> =
-        swapApplicationRepository.findBySwapRequestId(swapRequestId)
+    fun listApplications(swapRequestId: Long): List<SwapApplication> {
+        val request = swapRequestRepository.findById(swapRequestId)
+            .orElseThrow { NoSuchElementException("Swap request not found.") }
+        accessGuard.requireMemberOf(request.workplaceId)
+        return swapApplicationRepository.findBySwapRequestId(swapRequestId)
+    }
 
     fun myApplications(applicantId: Long, status: SwapRequestStatus?): List<SwapApplication> {
         val all = swapApplicationRepository.findByApplicantIdOrderByCreatedAtDesc(applicantId)
@@ -102,6 +110,7 @@ class SwapRequestService(
         if (request.status != SwapRequestStatus.PENDING) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "마감된 대타 요청입니다.")
         }
+        accessGuard.requireMemberOf(request.workplaceId)
         if (swapApplicationRepository.existsBySwapRequestIdAndApplicantId(swapRequestId, applicantId)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 지원한 요청입니다.")
         }
@@ -119,6 +128,7 @@ class SwapRequestService(
     fun approve(swapRequestId: Long, applicantId: Long): SwapRequest {
         val request = swapRequestRepository.findById(swapRequestId)
             .orElseThrow { NoSuchElementException("Swap request not found.") }
+        accessGuard.requireMemberOf(request.workplaceId)
         if (request.status != SwapRequestStatus.PENDING) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 대타 요청입니다.")
         }
@@ -154,6 +164,7 @@ class SwapRequestService(
     fun reject(id: Long): SwapRequest {
         val request = swapRequestRepository.findById(id)
             .orElseThrow { NoSuchElementException("Swap request not found.") }
+        accessGuard.requireMemberOf(request.workplaceId)
         if (request.status != SwapRequestStatus.PENDING) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 대타 요청입니다.")
         }

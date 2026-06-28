@@ -1,5 +1,6 @@
 package com.ptmanager.backend.joinrequest
 
+import com.ptmanager.backend.common.access.WorkplaceAccessGuard
 import com.ptmanager.backend.domain.JoinRequest
 import com.ptmanager.backend.domain.JoinRequestStatus
 import com.ptmanager.backend.domain.NotificationType
@@ -17,10 +18,13 @@ class JoinRequestService(
     private val workplaceRepository: WorkplaceRepository,
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
+    private val accessGuard: WorkplaceAccessGuard,
 ) {
 
-    fun findByWorkplace(workplaceId: Long, status: JoinRequestStatus): List<JoinRequest> =
-        joinRequestRepository.findByWorkplaceIdAndStatusOrderByCreatedAtDesc(workplaceId, status)
+    fun findByWorkplace(workplaceId: Long, status: JoinRequestStatus): List<JoinRequest> {
+        accessGuard.requireMemberOf(workplaceId)
+        return joinRequestRepository.findByWorkplaceIdAndStatusOrderByCreatedAtDesc(workplaceId, status)
+    }
 
     @Transactional
     fun create(inviteCode: String, userId: Long): JoinRequest {
@@ -41,6 +45,7 @@ class JoinRequestService(
     fun updateStatus(id: Long, status: JoinRequestStatus): JoinRequest {
         val request = joinRequestRepository.findById(id)
             .orElseThrow { NoSuchElementException("Join request not found.") }
+        accessGuard.requireMemberOf(request.workplaceId)
         request.status = status
         val saved = joinRequestRepository.save(request)
 

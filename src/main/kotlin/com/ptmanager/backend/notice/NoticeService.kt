@@ -1,5 +1,6 @@
 package com.ptmanager.backend.notice
 
+import com.ptmanager.backend.common.access.WorkplaceAccessGuard
 import com.ptmanager.backend.common.storage.StorageService
 import com.ptmanager.backend.domain.Notice
 import com.ptmanager.backend.domain.NoticeAttachment
@@ -21,14 +22,20 @@ class NoticeService(
     private val userRepository: UserRepository,
     private val notificationService: NotificationService,
     private val storageService: StorageService,
+    private val accessGuard: WorkplaceAccessGuard,
 ) {
 
-    fun findByWorkplace(workplaceId: Long): List<Notice> =
-        noticeRepository.findByWorkplaceIdOrderByCreatedAtDesc(workplaceId)
+    fun findByWorkplace(workplaceId: Long): List<Notice> {
+        accessGuard.requireMemberOf(workplaceId)
+        return noticeRepository.findByWorkplaceIdOrderByCreatedAtDesc(workplaceId)
+    }
 
-    fun findById(id: Long): Notice =
-        noticeRepository.findById(id)
+    fun findById(id: Long): Notice {
+        val notice = noticeRepository.findById(id)
             .orElseThrow { NoSuchElementException("Notice not found.") }
+        accessGuard.requireMemberOf(notice.workplaceId)
+        return notice
+    }
 
     @Transactional
     fun create(
@@ -38,6 +45,7 @@ class NoticeService(
         body: String,
         attachmentUrls: List<String>,
     ): Notice {
+        accessGuard.requireMemberOf(workplaceId)
         val notice = noticeRepository.save(
             Notice(workplaceId = workplaceId, authorId = authorId, title = title, body = body),
         )
@@ -70,6 +78,7 @@ class NoticeService(
         NoticeAttachment(fileUrl = storageService.store(file), createdAt = Instant.now())
 
     fun hasUnread(workplaceId: Long, userId: Long): Boolean {
+        accessGuard.requireMemberOf(workplaceId)
         val latest = noticeRepository.findFirstByWorkplaceIdOrderByCreatedAtDesc(workplaceId)
             ?: return false
         val user = userRepository.findById(userId)

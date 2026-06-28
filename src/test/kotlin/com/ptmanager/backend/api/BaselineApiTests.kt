@@ -111,6 +111,24 @@ class BaselineApiTests {
     }
 
     @Test
+    fun cannotAccessOtherWorkplaceData() {
+        val token = loginAs("employee@ptmanager.test") // 소속 매장 = 1
+        mockMvc.perform(
+            get("/api/notices?workplaceId=999").header(HttpHeaders.AUTHORIZATION, "Bearer $token"),
+        )
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun canAccessOwnWorkplaceData() {
+        val token = loginAs("employee@ptmanager.test")
+        mockMvc.perform(
+            get("/api/notices?workplaceId=1").header(HttpHeaders.AUTHORIZATION, "Bearer $token"),
+        )
+            .andExpect(status().isOk)
+    }
+
+    @Test
     fun employerCanCreateWorkplace() {
         val token = loginAs("employer@ptmanager.test")
         mockMvc.perform(

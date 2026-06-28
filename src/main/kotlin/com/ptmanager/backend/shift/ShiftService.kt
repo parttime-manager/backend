@@ -1,10 +1,12 @@
 package com.ptmanager.backend.shift
 
+import com.ptmanager.backend.common.access.WorkplaceAccessGuard
 import com.ptmanager.backend.domain.AttendanceStatus
 import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.domain.Shift
 import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.ShiftRepository
+import com.ptmanager.backend.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +20,9 @@ import java.util.NoSuchElementException
 @Service
 class ShiftService(
     private val shiftRepository: ShiftRepository,
+    private val userRepository: UserRepository,
     private val notificationService: NotificationService,
+    private val accessGuard: WorkplaceAccessGuard,
 ) {
 
     fun findShifts(
@@ -28,6 +32,17 @@ class ShiftService(
         to: LocalDate?,
         status: AttendanceStatus?,
     ): List<Shift> {
+        if (workplaceId != null) {
+            accessGuard.requireMemberOf(workplaceId)
+        }
+        if (employeeId != null && employeeId != accessGuard.currentUserId()) {
+            val target = userRepository.findById(employeeId)
+                .orElseThrow { NoSuchElementException("User not found.") }
+            accessGuard.requireMemberOf(
+                target.workplaceId
+                    ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "해당 직원에 접근 권한이 없습니다."),
+            )
+        }
         val base = when {
             employeeId != null ->
                 shiftRepository.findByEmployeeIdOrderByWorkDateAscStartTimeAsc(employeeId)
@@ -40,9 +55,12 @@ class ShiftService(
         return if (status == null) base else base.filter { it.attendanceStatus == status }
     }
 
-    fun getShift(id: Long): Shift =
-        shiftRepository.findById(id)
+    fun getShift(id: Long): Shift {
+        val shift = shiftRepository.findById(id)
             .orElseThrow { NoSuchElementException("Shift not found.") }
+        accessGuard.requireMemberOf(shift.workplaceId)
+        return shift
+    }
 
     @Transactional
     fun create(
@@ -52,6 +70,7 @@ class ShiftService(
         startTime: LocalTime,
         endTime: LocalTime,
     ): Shift {
+        accessGuard.requireMemberOf(workplaceId)
         val shift = shiftRepository.save(
             Shift(
                 workplaceId = workplaceId,

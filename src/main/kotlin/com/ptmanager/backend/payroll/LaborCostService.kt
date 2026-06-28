@@ -1,5 +1,6 @@
 package com.ptmanager.backend.payroll
 
+import com.ptmanager.backend.common.access.WorkplaceAccessGuard
 import com.ptmanager.backend.payroll.dto.LaborCostReport
 import com.ptmanager.backend.payroll.dto.LaborCostReport.EmployeeCost
 import com.ptmanager.backend.repository.ShiftRepository
@@ -15,9 +16,11 @@ class LaborCostService(
     private val workplaceRepository: WorkplaceRepository,
     private val shiftRepository: ShiftRepository,
     private val userRepository: UserRepository,
+    private val accessGuard: WorkplaceAccessGuard,
 ) {
 
     fun calculate(workplaceId: Long, from: LocalDate, to: LocalDate): LaborCostReport {
+        accessGuard.requireMemberOf(workplaceId)
         if (!workplaceRepository.existsById(workplaceId)) {
             throw NoSuchElementException("Workplace not found.")
         }
