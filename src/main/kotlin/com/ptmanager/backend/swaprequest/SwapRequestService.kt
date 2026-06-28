@@ -1,18 +1,22 @@
 package com.ptmanager.backend.swaprequest
 
 import com.ptmanager.backend.domain.NotificationType
+import com.ptmanager.backend.domain.Shift
 import com.ptmanager.backend.domain.SwapApplication
 import com.ptmanager.backend.domain.SwapRequest
 import com.ptmanager.backend.domain.SwapRequestStatus
+import com.ptmanager.backend.domain.UserRole
 import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.ShiftRepository
 import com.ptmanager.backend.repository.SwapApplicationRepository
 import com.ptmanager.backend.repository.SwapRequestRepository
+import com.ptmanager.backend.repository.UserRepository
 import com.ptmanager.backend.swaprequest.dto.SwapRequestDetail
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalTime
 import java.util.NoSuchElementException
 
 @Service
@@ -20,6 +24,7 @@ class SwapRequestService(
     private val swapRequestRepository: SwapRequestRepository,
     private val swapApplicationRepository: SwapApplicationRepository,
     private val shiftRepository: ShiftRepository,
+    private val userRepository: UserRepository,
     private val notificationService: NotificationService,
 ) {
 
@@ -30,14 +35,28 @@ class SwapRequestService(
         if (shift.employeeId != requesterId) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인 근무만 대타 요청할 수 있습니다.")
         }
-        val request = SwapRequest(
-            workplaceId = shift.workplaceId,
-            shiftId = shiftId,
-            requesterId = requesterId,
-            reason = reason,
-            status = SwapRequestStatus.PENDING,
+        val saved = swapRequestRepository.save(
+            SwapRequest(
+                workplaceId = shift.workplaceId,
+                shiftId = shiftId,
+                requesterId = requesterId,
+                reason = reason,
+                status = SwapRequestStatus.PENDING,
+            ),
         )
-        return swapRequestRepository.save(request)
+
+        // 같은 매장 직원들에게 대타 요청 알림 (요청자 제외)
+        val recipients = userRepository.findByWorkplaceIdAndRole(shift.workplaceId, UserRole.EMPLOYEE)
+            .mapNotNull { it.id }
+            .filter { it != requesterId }
+        notificationService.notifyAll(
+            recipients,
+            NotificationType.SWAP_REQUEST,
+            "새 대타 요청이 등록되었습니다.",
+            targetType = "SWAP_REQUEST",
+            targetId = saved.id,
+        )
+        return saved
     }
 
     /** view: open(지원 가능, 본인 제외) | mine(내 요청) | pending(승인 대기) */
@@ -86,7 +105,11 @@ class SwapRequestService(
         if (swapApplicationRepository.existsBySwapRequestIdAndApplicantId(swapRequestId, applicantId)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 지원한 요청입니다.")
         }
-        // TODO: 더블부킹 검증 — 같은 work_date 에 시간이 겹치는 근무가 있으면 거부
+        val targetShift = shiftRepository.findById(request.shiftId)
+            .orElseThrow { NoSuchElementException("Shift not found.") }
+        if (hasTimeConflict(applicantId, targetShift)) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "같은 시간대에 이미 근무가 있어 지원할 수 없습니다.")
+        }
         return swapApplicationRepository.save(
             SwapApplication(swapRequestId = swapRequestId, applicantId = applicantId),
         )
@@ -116,8 +139,14 @@ class SwapRequestService(
             shiftRepository.save(shift)
         }
 
-        notificationService.notify(request.requesterId, NotificationType.SWAP_RESULT, "대타 요청이 승인되었습니다.")
-        notificationService.notify(applicantId, NotificationType.SWAP_RESULT, "대타 지원이 승인되었습니다.")
+        notificationService.notify(
+            request.requesterId, NotificationType.SWAP_RESULT, "대타 요청이 승인되었습니다.",
+            targetType = "SWAP_REQUEST", targetId = saved.id,
+        )
+        notificationService.notify(
+            applicantId, NotificationType.SWAP_RESULT, "대타 지원이 승인되었습니다.",
+            targetType = "SWAP_REQUEST", targetId = saved.id,
+        )
         return saved
     }
 
@@ -130,7 +159,28 @@ class SwapRequestService(
         }
         request.status = SwapRequestStatus.REJECTED
         val saved = swapRequestRepository.save(request)
-        notificationService.notify(request.requesterId, NotificationType.SWAP_RESULT, "대타 요청이 거절되었습니다.")
+        notificationService.notify(
+            request.requesterId, NotificationType.SWAP_RESULT, "대타 요청이 거절되었습니다.",
+            targetType = "SWAP_REQUEST", targetId = saved.id,
+        )
         return saved
+    }
+
+    /** 같은 work_date 에 시간이 겹치는 근무가 있는지 (더블부킹). 야간 교대(end<start)는 익일로 보정. */
+    private fun hasTimeConflict(employeeId: Long, target: Shift): Boolean {
+        val (targetStart, targetEnd) = toMinuteRange(target.startTime, target.endTime)
+        return shiftRepository.findByEmployeeIdOrderByWorkDateAscStartTimeAsc(employeeId)
+            .filter { it.workDate == target.workDate && it.id != target.id }
+            .any {
+                val (start, end) = toMinuteRange(it.startTime, it.endTime)
+                targetStart < end && start < targetEnd
+            }
+    }
+
+    private fun toMinuteRange(start: LocalTime, end: LocalTime): Pair<Int, Int> {
+        val startMin = start.toSecondOfDay() / 60
+        var endMin = end.toSecondOfDay() / 60
+        if (endMin <= startMin) endMin += 24 * 60 // 야간 교대: 익일로 보정
+        return startMin to endMin
     }
 }

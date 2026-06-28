@@ -4,6 +4,7 @@ import com.ptmanager.backend.auth.dto.TokenResponse
 import com.ptmanager.backend.config.security.JwtTokenProvider
 import com.ptmanager.backend.domain.User
 import com.ptmanager.backend.domain.UserRole
+import com.ptmanager.backend.repository.DeviceTokenRepository
 import com.ptmanager.backend.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -15,6 +16,7 @@ import java.util.NoSuchElementException
 @Service
 class AuthService(
     private val userRepository: UserRepository,
+    private val deviceTokenRepository: DeviceTokenRepository,
     private val passwordEncoder: PasswordEncoder,
     private val jwtTokenProvider: JwtTokenProvider,
 ) {
@@ -57,6 +59,15 @@ class AuthService(
     fun getMe(userId: Long): User =
         userRepository.findById(userId)
             .orElseThrow { NoSuchElementException("User not found.") }
+
+    /** 현재 기기의 FCM 토큰을 제거한다. (스테이트리스 JWT라 액세스 토큰 자체는 만료까지 유효) */
+    @Transactional
+    fun logout(userId: Long, deviceToken: String?) {
+        if (deviceToken == null) return
+        deviceTokenRepository.findByToken(deviceToken)?.let {
+            if (it.userId == userId) deviceTokenRepository.delete(it)
+        }
+    }
 
     private fun issueTokens(user: User): TokenResponse {
         val id = user.id!!

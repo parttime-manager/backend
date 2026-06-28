@@ -2,6 +2,7 @@ package com.ptmanager.backend.payroll
 
 import com.ptmanager.backend.payroll.dto.PayrollItem
 import com.ptmanager.backend.payroll.dto.PayrollSummary
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -16,6 +17,7 @@ class PayrollController(
 
     /** 월 단위 인건비 집계. yearMonth 예: 2026-06 */
     @GetMapping
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun payroll(
         @RequestParam workplaceId: Long,
         @RequestParam yearMonth: String,

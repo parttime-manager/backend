@@ -8,6 +8,7 @@ import com.ptmanager.backend.shift.dto.UpdateShiftRequest
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -46,6 +47,7 @@ class ShiftController(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun createShift(@Valid @RequestBody request: CreateShiftRequest): Shift =
         shiftService.create(
             request.workplaceId,
@@ -59,6 +61,7 @@ class ShiftController(
     fun getShift(@PathVariable shiftId: Long): Shift = shiftService.getShift(shiftId)
 
     @PatchMapping("/{shiftId}")
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun updateShift(
         @PathVariable shiftId: Long,
         @RequestBody request: UpdateShiftRequest,
@@ -72,11 +75,13 @@ class ShiftController(
 
     @DeleteMapping("/{shiftId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun deleteShift(@PathVariable shiftId: Long) = shiftService.delete(shiftId)
 
     @PostMapping("/{shiftId}/check-in")
     fun checkIn(
+        @AuthenticationPrincipal userId: Long,
         @PathVariable shiftId: Long,
         @Valid @RequestBody request: CheckInRequest,
-    ): Shift = shiftService.checkIn(shiftId)
+    ): Shift = shiftService.checkIn(shiftId, userId, request.qrToken)
 }

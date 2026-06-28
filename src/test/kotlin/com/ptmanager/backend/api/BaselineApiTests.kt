@@ -89,6 +89,41 @@ class BaselineApiTests {
     }
 
     @Test
+    fun employeeForbiddenFromEmployerEndpoint() {
+        val token = loginAs("employee@ptmanager.test")
+        mockMvc.perform(
+            post("/api/shifts")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "workplaceId": 1,
+                      "employeeId": 1,
+                      "workDate": "2026-07-01",
+                      "startTime": "09:00:00",
+                      "endTime": "14:00:00"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun employerCanCreateWorkplace() {
+        val token = loginAs("employer@ptmanager.test")
+        mockMvc.perform(
+            post("/api/workplaces")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"테스트 매장","address":"서울"}"""),
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.inviteCode").exists())
+    }
+
+    @Test
     fun createSwapRequestReturnsPendingStatus() {
         val token = loginAs("employee@ptmanager.test")
         mockMvc.perform(

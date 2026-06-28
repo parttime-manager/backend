@@ -1,12 +1,16 @@
 package com.ptmanager.backend.notice
 
+import com.ptmanager.backend.common.storage.StorageService
 import com.ptmanager.backend.domain.Notice
 import com.ptmanager.backend.domain.NoticeAttachment
+import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.repository.NoticeAttachmentRepository
 import com.ptmanager.backend.repository.NoticeRepository
 import com.ptmanager.backend.repository.UserRepository
+import com.ptmanager.backend.notification.NotificationService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import java.time.Instant
 import java.util.NoSuchElementException
 
@@ -15,6 +19,8 @@ class NoticeService(
     private val noticeRepository: NoticeRepository,
     private val noticeAttachmentRepository: NoticeAttachmentRepository,
     private val userRepository: UserRepository,
+    private val notificationService: NotificationService,
+    private val storageService: StorageService,
 ) {
 
     fun findByWorkplace(workplaceId: Long): List<Notice> =
@@ -38,6 +44,18 @@ class NoticeService(
         attachmentUrls.forEach { url ->
             noticeAttachmentRepository.save(NoticeAttachment(noticeId = notice.id!!, fileUrl = url))
         }
+
+        // 같은 매장 직원들에게 새 공지 알림 (작성자 제외)
+        val recipients = userRepository.findByWorkplaceId(workplaceId)
+            .mapNotNull { it.id }
+            .filter { it != authorId }
+        notificationService.notifyAll(
+            recipients,
+            NotificationType.NOTICE,
+            "새 공지가 등록되었습니다: $title",
+            targetType = "NOTICE",
+            targetId = notice.id,
+        )
         return notice
     }
 
@@ -46,6 +64,10 @@ class NoticeService(
         val notice = findById(id)
         noticeRepository.delete(notice) // 첨부는 DB의 ON DELETE CASCADE 대상 (운영 PostgreSQL)
     }
+
+    /** 첨부 파일을 스토리지에 올리고 접근 URL을 담은 (비영속) NoticeAttachment 를 반환한다. */
+    fun uploadAttachment(file: MultipartFile): NoticeAttachment =
+        NoticeAttachment(fileUrl = storageService.store(file), createdAt = Instant.now())
 
     fun hasUnread(workplaceId: Long, userId: Long): Boolean {
         val latest = noticeRepository.findFirstByWorkplaceIdOrderByCreatedAtDesc(workplaceId)

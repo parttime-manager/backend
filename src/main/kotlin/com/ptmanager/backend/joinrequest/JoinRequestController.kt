@@ -6,6 +6,7 @@ import com.ptmanager.backend.joinrequest.dto.CreateJoinRequest
 import com.ptmanager.backend.joinrequest.dto.DecisionRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -31,12 +32,14 @@ class JoinRequestController(
     ): JoinRequest = joinRequestService.create(request.inviteCode, userId)
 
     @GetMapping
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun findJoinRequests(
         @RequestParam workplaceId: Long,
         @RequestParam(required = false, defaultValue = "PENDING") status: JoinRequestStatus,
     ): List<JoinRequest> = joinRequestService.findByWorkplace(workplaceId, status)
 
     @PatchMapping("/{joinRequestId}")
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun decide(
         @PathVariable joinRequestId: Long,
         @Valid @RequestBody request: DecisionRequest,

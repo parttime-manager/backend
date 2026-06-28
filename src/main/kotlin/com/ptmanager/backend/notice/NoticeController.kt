@@ -7,6 +7,7 @@ import com.ptmanager.backend.notice.dto.CreateNoticeRequest
 import com.ptmanager.backend.notice.dto.UnreadFlag
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import java.time.Instant
 
 @RestController
 @RequestMapping("/api/notices")
@@ -42,6 +42,7 @@ class NoticeController(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun createNotice(
         @AuthenticationPrincipal userId: Long,
         @Valid @RequestBody request: CreateNoticeRequest,
@@ -58,19 +59,14 @@ class NoticeController(
 
     @DeleteMapping("/{noticeId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun deleteNotice(@PathVariable noticeId: Long) = noticeService.delete(noticeId)
 
     @PostMapping("/attachments")
     @ResponseStatus(HttpStatus.CREATED)
-    fun uploadAttachment(@RequestParam("file") file: MultipartFile): NoticeAttachment {
-        // TODO: S3 업로드 연동. 현재는 목 응답.
-        return NoticeAttachment(
-            id = 0,
-            noticeId = 0,
-            fileUrl = "https://example.com/uploads/${file.originalFilename ?: "file"}",
-            createdAt = Instant.now(),
-        )
-    }
+    @PreAuthorize("hasRole('EMPLOYER')")
+    fun uploadAttachment(@RequestParam("file") file: MultipartFile): NoticeAttachment =
+        noticeService.uploadAttachment(file)
 
     @GetMapping("/unread")
     fun unread(

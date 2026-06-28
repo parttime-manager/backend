@@ -37,9 +37,11 @@ class AuthController(
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun logout(@RequestBody(required = false) request: LogoutRequest?) {
-        // 스테이트리스 JWT — 클라이언트가 토큰을 폐기한다.
-        // (추후 device_token 연동 시 request.deviceToken 제거 로직 추가)
+    fun logout(
+        @AuthenticationPrincipal userId: Long,
+        @RequestBody(required = false) request: LogoutRequest?,
+    ) {
+        authService.logout(userId, request?.deviceToken)
     }
 
     @GetMapping("/me")

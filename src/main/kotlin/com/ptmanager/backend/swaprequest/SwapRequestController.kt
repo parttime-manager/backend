@@ -8,6 +8,7 @@ import com.ptmanager.backend.swaprequest.dto.CreateSwapRequest
 import com.ptmanager.backend.swaprequest.dto.SwapRequestDetail
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -51,15 +52,18 @@ class SwapRequestController(
     ): SwapApplication = swapRequestService.apply(swapRequestId, userId)
 
     @GetMapping("/{swapRequestId}/applications")
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun listApplications(@PathVariable swapRequestId: Long): List<SwapApplication> =
         swapRequestService.listApplications(swapRequestId)
 
     @PostMapping("/{swapRequestId}/approve")
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun approve(
         @PathVariable swapRequestId: Long,
         @Valid @RequestBody request: ApproveSwapRequest,
     ): SwapRequest = swapRequestService.approve(swapRequestId, request.applicantId)
 
     @PostMapping("/{swapRequestId}/reject")
+    @PreAuthorize("hasRole('EMPLOYER')")
     fun reject(@PathVariable swapRequestId: Long): SwapRequest = swapRequestService.reject(swapRequestId)
 }

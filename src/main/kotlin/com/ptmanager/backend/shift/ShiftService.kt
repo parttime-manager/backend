@@ -1,10 +1,14 @@
 package com.ptmanager.backend.shift
 
 import com.ptmanager.backend.domain.AttendanceStatus
+import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.domain.Shift
+import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.ShiftRepository
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -14,6 +18,7 @@ import java.util.NoSuchElementException
 @Service
 class ShiftService(
     private val shiftRepository: ShiftRepository,
+    private val notificationService: NotificationService,
 ) {
 
     fun findShifts(
@@ -46,8 +51,8 @@ class ShiftService(
         workDate: LocalDate,
         startTime: LocalTime,
         endTime: LocalTime,
-    ): Shift =
-        shiftRepository.save(
+    ): Shift {
+        val shift = shiftRepository.save(
             Shift(
                 workplaceId = workplaceId,
                 employeeId = employeeId,
@@ -56,6 +61,9 @@ class ShiftService(
                 endTime = endTime,
             ),
         )
+        notifyScheduleChanged(shift, "새 근무가 편성되었습니다.")
+        return shift
+    }
 
     @Transactional
     fun update(
@@ -70,7 +78,9 @@ class ShiftService(
         workDate?.let { shift.workDate = it }
         startTime?.let { shift.startTime = it }
         endTime?.let { shift.endTime = it }
-        return shiftRepository.save(shift)
+        val saved = shiftRepository.save(shift)
+        notifyScheduleChanged(saved, "근무 편성이 변경되었습니다.")
+        return saved
     }
 
     @Transactional
@@ -80,9 +90,13 @@ class ShiftService(
     }
 
     @Transactional
-    fun checkIn(shiftId: Long): Shift {
+    fun checkIn(shiftId: Long, currentUserId: Long, qrToken: String): Shift {
         val shift = getShift(shiftId)
-        require(shift.checkedInAt == null) { "Shift is already checked in." }
+        if (shift.employeeId != currentUserId) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인 근무만 출근 체크할 수 있습니다.")
+        }
+        validateQrToken(shift, qrToken)
+        require(shift.checkedInAt == null) { "이미 출근 처리된 근무입니다." }
 
         val now = Instant.now()
         shift.checkedInAt = now
@@ -94,5 +108,26 @@ class ShiftService(
             if (now.isAfter(scheduledStart)) AttendanceStatus.LATE else AttendanceStatus.PRESENT
 
         return shiftRepository.save(shift)
+    }
+
+    private fun notifyScheduleChanged(shift: Shift, message: String) {
+        notificationService.notify(
+            shift.employeeId,
+            NotificationType.SCHEDULE_CHANGED,
+            message,
+            targetType = "SHIFT",
+            targetId = shift.id,
+        )
+    }
+
+    /**
+     * 매장 QR 토큰 검증. 형식 `wp{workplaceId}:{epochSeconds}:{signature}`.
+     * 현재는 형식·매장 일치만 확인한다. (TODO: HMAC 서명 검증 + 시간 윈도우)
+     */
+    private fun validateQrToken(shift: Shift, qrToken: String) {
+        val parts = qrToken.split(":")
+        require(parts.size == 3 && parts[0] == "wp${shift.workplaceId}") {
+            "유효하지 않은 QR 토큰입니다."
+        }
     }
 }
