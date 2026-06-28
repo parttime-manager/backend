@@ -5,10 +5,11 @@ import com.ptmanager.backend.common.storage.StorageService
 import com.ptmanager.backend.domain.Notice
 import com.ptmanager.backend.domain.NoticeAttachment
 import com.ptmanager.backend.domain.NotificationType
+import com.ptmanager.backend.notice.dto.NoticeResponse
+import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.NoticeAttachmentRepository
 import com.ptmanager.backend.repository.NoticeRepository
 import com.ptmanager.backend.repository.UserRepository
-import com.ptmanager.backend.notification.NotificationService
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
@@ -27,16 +28,25 @@ class NoticeService(
     private val accessGuard: WorkplaceAccessGuard,
 ) {
 
-    fun findByWorkplace(workplaceId: Long, pageable: Pageable): Page<Notice> {
+    fun findByWorkplace(workplaceId: Long, pageable: Pageable): Page<NoticeResponse> {
         accessGuard.requireMemberOf(workplaceId)
-        return noticeRepository.findByWorkplaceIdOrderByCreatedAtDesc(workplaceId, pageable)
+        val page = noticeRepository.findByWorkplaceIdOrderByCreatedAtDesc(workplaceId, pageable)
+        val notices = page.content
+
+        val authorNames = userRepository.findAllById(notices.map { it.authorId }.distinct())
+            .associate { it.id to it.name }
+        val attachmentsByNotice = noticeAttachmentRepository
+            .findByNoticeIdIn(notices.mapNotNull { it.id })
+            .groupBy { it.noticeId }
+
+        return page.map {
+            toResponse(it, authorNames[it.authorId], attachmentsByNotice[it.id] ?: emptyList())
+        }
     }
 
-    fun findById(id: Long): Notice {
-        val notice = noticeRepository.findById(id)
-            .orElseThrow { NoSuchElementException("Notice not found.") }
-        accessGuard.requireMemberOf(notice.workplaceId)
-        return notice
+    fun findById(id: Long): NoticeResponse {
+        val notice = getNotice(id)
+        return toResponse(notice, authorNameOf(notice.authorId), attachmentsOf(notice.id))
     }
 
     @Transactional
@@ -46,12 +56,12 @@ class NoticeService(
         title: String,
         body: String,
         attachmentUrls: List<String>,
-    ): Notice {
+    ): NoticeResponse {
         accessGuard.requireMemberOf(workplaceId)
         val notice = noticeRepository.save(
             Notice(workplaceId = workplaceId, authorId = authorId, title = title, body = body),
         )
-        attachmentUrls.forEach { url ->
+        val attachments = attachmentUrls.map { url ->
             noticeAttachmentRepository.save(NoticeAttachment(noticeId = notice.id!!, fileUrl = url))
         }
 
@@ -66,13 +76,15 @@ class NoticeService(
             targetType = "NOTICE",
             targetId = notice.id,
         )
-        return notice
+        return toResponse(notice, authorNameOf(authorId), attachments)
     }
 
     @Transactional
     fun delete(id: Long) {
-        val notice = findById(id)
-        noticeRepository.delete(notice) // 첨부는 DB의 ON DELETE CASCADE 대상 (운영 PostgreSQL)
+        val notice = getNotice(id)
+        // 첨부를 먼저 제거한다. (plain FK라 DB 캐스케이드에 의존하지 않고 앱에서 정리)
+        noticeAttachmentRepository.deleteByNoticeId(notice.id!!)
+        noticeRepository.delete(notice)
     }
 
     /** 첨부 파일을 스토리지에 올리고 접근 URL을 담은 (비영속) NoticeAttachment 를 반환한다. */
@@ -97,4 +109,33 @@ class NoticeService(
         user.lastReadNoticeAt = Instant.now()
         userRepository.save(user)
     }
+
+    private fun getNotice(id: Long): Notice {
+        val notice = noticeRepository.findById(id)
+            .orElseThrow { NoSuchElementException("Notice not found.") }
+        accessGuard.requireMemberOf(notice.workplaceId)
+        return notice
+    }
+
+    private fun authorNameOf(authorId: Long): String? =
+        userRepository.findById(authorId).orElse(null)?.name
+
+    private fun attachmentsOf(noticeId: Long?): List<NoticeAttachment> =
+        if (noticeId == null) emptyList() else noticeAttachmentRepository.findByNoticeId(noticeId)
+
+    private fun toResponse(
+        notice: Notice,
+        authorName: String?,
+        attachments: List<NoticeAttachment>,
+    ): NoticeResponse =
+        NoticeResponse(
+            id = notice.id,
+            workplaceId = notice.workplaceId,
+            authorId = notice.authorId,
+            authorName = authorName,
+            title = notice.title,
+            body = notice.body,
+            attachments = attachments,
+            createdAt = notice.createdAt,
+        )
 }

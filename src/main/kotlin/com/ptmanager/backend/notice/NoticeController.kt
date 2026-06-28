@@ -1,9 +1,9 @@
 package com.ptmanager.backend.notice
 
 import com.ptmanager.backend.common.dto.PageResponse
-import com.ptmanager.backend.domain.Notice
 import com.ptmanager.backend.domain.NoticeAttachment
 import com.ptmanager.backend.notice.dto.CreateNoticeRequest
+import com.ptmanager.backend.notice.dto.NoticeResponse
 import com.ptmanager.backend.notice.dto.UnreadFlag
 import jakarta.validation.Valid
 import org.springframework.data.domain.PageRequest
@@ -32,7 +32,7 @@ class NoticeController(
         @RequestParam workplaceId: Long,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
-    ): PageResponse<Notice> {
+    ): PageResponse<NoticeResponse> {
         val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, 100))
         val result = noticeService.findByWorkplace(workplaceId, pageable)
         return PageResponse(
@@ -50,7 +50,7 @@ class NoticeController(
     fun createNotice(
         @AuthenticationPrincipal userId: Long,
         @Valid @RequestBody request: CreateNoticeRequest,
-    ): Notice = noticeService.create(
+    ): NoticeResponse = noticeService.create(
         request.workplaceId,
         userId,
         request.title,
@@ -59,7 +59,7 @@ class NoticeController(
     )
 
     @GetMapping("/{noticeId}")
-    fun findNotice(@PathVariable noticeId: Long): Notice = noticeService.findById(noticeId)
+    fun findNotice(@PathVariable noticeId: Long): NoticeResponse = noticeService.findById(noticeId)
 
     @DeleteMapping("/{noticeId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

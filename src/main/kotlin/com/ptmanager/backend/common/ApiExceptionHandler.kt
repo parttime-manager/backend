@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.multipart.MaxUploadSizeExceededException
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.util.NoSuchElementException
@@ -29,6 +30,11 @@ class ApiExceptionHandler {
         return ResponseEntity.status(status)
             .body(ApiError(code, exception.reason, Instant.now(), emptyMap()))
     }
+
+    @ExceptionHandler(MaxUploadSizeExceededException::class)
+    fun handlePayloadTooLarge(exception: MaxUploadSizeExceededException): ResponseEntity<ApiError> =
+        ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+            .body(ApiError("PAYLOAD_TOO_LARGE", "파일 용량이 초과되었습니다.", Instant.now(), emptyMap()))
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(exception: MethodArgumentNotValidException): ResponseEntity<ApiError> {

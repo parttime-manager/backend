@@ -146,6 +146,48 @@ class BaselineApiTests {
     }
 
     @Test
+    fun noticeResponseIncludesAuthorNameAndAttachments() {
+        // 새 사장 가입 → 매장 생성(자동 소속) → 첨부 포함 공지 작성 → 응답 검증
+        val signup = mockMvc.perform(
+            post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"email":"noticeboss@ptmanager.test","password":"password1","name":"공지사장","role":"EMPLOYER"}"""),
+        )
+            .andExpect(status().isCreated)
+            .andReturn().response.contentAsString
+        val token: String = JsonPath.read(signup, "$.accessToken")
+
+        val workplace = mockMvc.perform(
+            post("/api/workplaces")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"공지 테스트 매장"}"""),
+        )
+            .andExpect(status().isCreated)
+            .andReturn().response.contentAsString
+        val workplaceId: Int = JsonPath.read(workplace, "$.id")
+
+        mockMvc.perform(
+            post("/api/notices")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "workplaceId": $workplaceId,
+                      "title": "안내",
+                      "body": "본문",
+                      "attachmentUrls": ["https://example.com/a.jpg"]
+                    }
+                    """.trimIndent(),
+                ),
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.authorName", `is`("공지사장")))
+            .andExpect(jsonPath("$.attachments[0].fileUrl", `is`("https://example.com/a.jpg")))
+    }
+
+    @Test
     fun checkInWithValidQrTokenSucceeds() {
         val token = loginAs("employee@ptmanager.test")
         val qrToken = qrCodeService.issue(1) // 매장 1의 QR

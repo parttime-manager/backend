@@ -385,7 +385,7 @@ QR 출근 체크(`POST /api/shifts/{shiftId}/check-in`)가 검증할 **서명된
 
 ### 6.4 공지 삭제 (사장) — `DELETE /api/notices/{noticeId}`
 
-공지를 삭제한다. 첨부(`notice_attachment`)는 `ON DELETE CASCADE`로 함께 삭제된다.
+공지를 삭제한다. 첨부(`notice_attachment`)도 함께 삭제된다(앱 레벨에서 명시적으로 정리하며, 운영 PostgreSQL에선 `ON DELETE CASCADE`도 적용).
 
 응답 `204 No Content`. 오류: `403`, `404`.
 
