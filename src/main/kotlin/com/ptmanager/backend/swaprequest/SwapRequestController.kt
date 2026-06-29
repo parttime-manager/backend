@@ -1,10 +1,10 @@
 package com.ptmanager.backend.swaprequest
 
-import com.ptmanager.backend.domain.SwapApplication
 import com.ptmanager.backend.domain.SwapRequest
 import com.ptmanager.backend.domain.SwapRequestStatus
 import com.ptmanager.backend.swaprequest.dto.ApproveSwapRequest
 import com.ptmanager.backend.swaprequest.dto.CreateSwapRequest
+import com.ptmanager.backend.swaprequest.dto.SwapApplicationResponse
 import com.ptmanager.backend.swaprequest.dto.SwapRequestDetail
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -49,11 +49,11 @@ class SwapRequestController(
     fun apply(
         @AuthenticationPrincipal userId: Long,
         @PathVariable swapRequestId: Long,
-    ): SwapApplication = swapRequestService.apply(swapRequestId, userId)
+    ): SwapApplicationResponse = swapRequestService.apply(swapRequestId, userId)
 
     @GetMapping("/{swapRequestId}/applications")
     @PreAuthorize("hasRole('EMPLOYER')")
-    fun listApplications(@PathVariable swapRequestId: Long): List<SwapApplication> =
+    fun listApplications(@PathVariable swapRequestId: Long): List<SwapApplicationResponse> =
         swapRequestService.listApplications(swapRequestId)
 
     @PostMapping("/{swapRequestId}/approve")

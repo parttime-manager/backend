@@ -10,4 +10,6 @@ interface SwapApplicationRepository : JpaRepository<SwapApplication, Long> {
     fun findByApplicantIdOrderByCreatedAtDesc(applicantId: Long): List<SwapApplication>
 
     fun existsBySwapRequestIdAndApplicantId(swapRequestId: Long, applicantId: Long): Boolean
+
+    fun deleteBySwapRequestIdIn(swapRequestIds: Collection<Long>)
 }

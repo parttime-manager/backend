@@ -270,7 +270,7 @@ QR 출근 체크(`POST /api/shifts/{shiftId}/check-in`)가 검증할 **서명된
 
 ### 4.5 근무 삭제 (사장) — `DELETE /api/shifts/{shiftId}`
 
-근무를 삭제한다. 단, PENDING 대타 요청이 걸린 근무는 `ON DELETE RESTRICT`로 삭제가 거부된다(409). 열린 대타를 먼저 정리해야 한다.
+근무를 삭제한다. 단, PENDING 대타 요청이 걸린 근무는 삭제가 거부된다(409, ERD의 `ON DELETE RESTRICT` 의도를 앱 레벨에서 강제). 삭제 시 해당 근무의 이력 대타(APPROVED/REJECTED)와 그 지원들은 함께 정리된다.
 
 응답 `204 No Content`. 오류: `403`, `404`, `409`(대타 요청이 걸려 삭제 불가).
 
@@ -323,7 +323,7 @@ QR 출근 체크(`POST /api/shifts/{shiftId}/check-in`)가 검증할 **서명된
 
 ### 5.4 대타 지원 (직원) — `POST /api/swap-requests/{swapRequestId}/applications`
 
-열린 대타 요청에 지원한다. **앱단 검증**: 요청자 본인은 지원 불가, 같은 `work_date`에 시간이 겹치는 근무가 있으면(더블부킹) 거부. `(swap_request_id, applicant_id)` 유니크로 중복 지원 차단.
+열린 대타 요청에 지원한다. **앱단 검증**: 요청자 본인은 지원 불가, 같은 `work_date`에 시간이 겹치는 **확정 근무 또는 다른 열린 대타에 낸 PENDING 지원**이 있으면(더블부킹) 거부. `(swap_request_id, applicant_id)` 유니크로 중복 지원 차단.
 
 응답 `201 Created` — `SwapApplication`. 오류: `400`(더블부킹), `403`(본인 요청), `409`(이미 지원 / 마감된 요청).
 

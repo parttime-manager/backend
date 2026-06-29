@@ -27,6 +27,69 @@ class BaselineApiTests {
     @Autowired
     private lateinit var qrCodeService: QrCodeService
 
+    private fun signupReturning(email: String, name: String, role: String): Pair<String, Long> {
+        val body = mockMvc.perform(
+            post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"email":"$email","password":"password1","name":"$name","role":"$role"}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString
+        val token: String = JsonPath.read(body, "$.accessToken")
+        val id: Int = JsonPath.read(body, "$.user.id")
+        return token to id.toLong()
+    }
+
+    private fun createWorkplace(token: String, name: String): Pair<Long, String> {
+        val body = mockMvc.perform(
+            post("/api/workplaces")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"$name"}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString
+        val id: Int = JsonPath.read(body, "$.id")
+        val code: String = JsonPath.read(body, "$.inviteCode")
+        return id.toLong() to code
+    }
+
+    private fun joinAndApprove(employeeToken: String, inviteCode: String, employerToken: String) {
+        val jr = mockMvc.perform(
+            post("/api/join-requests")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $employeeToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"inviteCode":"$inviteCode"}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString
+        val joinId: Int = JsonPath.read(jr, "$.id")
+        mockMvc.perform(
+            patch("/api/join-requests/$joinId")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $employerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"decision":"APPROVE"}"""),
+        ).andExpect(status().isOk)
+    }
+
+    private fun createShift(employerToken: String, workplaceId: Long, employeeId: Long, start: String, end: String): Long {
+        val body = mockMvc.perform(
+            post("/api/shifts")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $employerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """{"workplaceId":$workplaceId,"employeeId":$employeeId,"workDate":"2026-07-01","startTime":"$start","endTime":"$end"}""",
+                ),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString
+        val id: Int = JsonPath.read(body, "$.id")
+        return id.toLong()
+    }
+
+    private fun createSwap(token: String, shiftId: Long): Long {
+        val body = mockMvc.perform(
+            post("/api/swap-requests")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"shiftId":$shiftId,"reason":"테스트"}"""),
+        ).andExpect(status().isCreated).andReturn().response.contentAsString
+        val id: Int = JsonPath.read(body, "$.id")
+        return id.toLong()
+    }
+
     private fun loginAs(email: String): String {
         val response = mockMvc.perform(
             post("/api/auth/login")
@@ -304,6 +367,51 @@ class BaselineApiTests {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.checkedInAt").exists())
             .andExpect(jsonPath("$.employeeName", `is`("Kim Employee")))
+    }
+
+    @Test
+    fun swapGuardsAndDetailShape() {
+        val (eToken, _) = signupReturning("swap-boss@ptmanager.test", "사장", "EMPLOYER")
+        val (wId, invite) = createWorkplace(eToken, "대타 테스트 매장")
+        val (aToken, aId) = signupReturning("swap-a@ptmanager.test", "에이", "EMPLOYEE")
+        val (bToken, bId) = signupReturning("swap-b@ptmanager.test", "비", "EMPLOYEE")
+        val (cToken, _) = signupReturning("swap-c@ptmanager.test", "씨", "EMPLOYEE")
+        joinAndApprove(aToken, invite, eToken)
+        joinAndApprove(bToken, invite, eToken)
+        joinAndApprove(cToken, invite, eToken)
+
+        // 같은 날 겹치는 근무 2건 (A: 09-14, B: 10-15)
+        val shiftA = createShift(eToken, wId, aId, "09:00:00", "14:00:00")
+        val shiftB = createShift(eToken, wId, bId, "10:00:00", "15:00:00")
+
+        val swapA = createSwap(aToken, shiftA)
+        // ① 같은 근무에 PENDING 중복 → 409
+        mockMvc.perform(
+            post("/api/swap-requests")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $aToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"shiftId":$shiftA,"reason":"중복"}"""),
+        ).andExpect(status().isConflict)
+
+        val swapB = createSwap(bToken, shiftB)
+
+        // C가 swapA에 지원(201) 후, 겹치는 swapB에 지원 → ② 교차 더블부킹 400
+        mockMvc.perform(
+            post("/api/swap-requests/$swapA/applications").header(HttpHeaders.AUTHORIZATION, "Bearer $cToken"),
+        ).andExpect(status().isCreated)
+        mockMvc.perform(
+            post("/api/swap-requests/$swapB/applications").header(HttpHeaders.AUTHORIZATION, "Bearer $cToken"),
+        ).andExpect(status().isBadRequest)
+
+        // ③ 상세 응답 평면화 + ④ applicantName
+        mockMvc.perform(
+            get("/api/swap-requests/$swapA").header(HttpHeaders.AUTHORIZATION, "Bearer $eToken"),
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.shiftId", `is`(shiftA.toInt())))
+            .andExpect(jsonPath("$.status", `is`("PENDING")))
+            .andExpect(jsonPath("$.request").doesNotExist())
+            .andExpect(jsonPath("$.applications[0].applicantName", `is`("씨")))
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.ptmanager.backend.domain.Shift
 import com.ptmanager.backend.domain.SwapRequestStatus
 import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.ShiftRepository
+import com.ptmanager.backend.repository.SwapApplicationRepository
 import com.ptmanager.backend.repository.SwapRequestRepository
 import com.ptmanager.backend.repository.UserRepository
 import com.ptmanager.backend.shift.dto.ShiftResponse
@@ -25,6 +26,7 @@ class ShiftService(
     private val shiftRepository: ShiftRepository,
     private val userRepository: UserRepository,
     private val swapRequestRepository: SwapRequestRepository,
+    private val swapApplicationRepository: SwapApplicationRepository,
     private val notificationService: NotificationService,
     private val accessGuard: WorkplaceAccessGuard,
     private val qrCodeService: QrCodeService,
@@ -116,9 +118,17 @@ class ShiftService(
     @Transactional
     fun delete(id: Long) {
         val shift = getShift(id)
+        val shiftId = shift.id!!
         // 열린(PENDING) 대타 요청이 걸린 근무는 삭제할 수 없다. (ERD: ON DELETE RESTRICT)
-        if (swapRequestRepository.existsByShiftIdAndStatus(shift.id!!, SwapRequestStatus.PENDING)) {
+        if (swapRequestRepository.existsByShiftIdAndStatus(shiftId, SwapRequestStatus.PENDING)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "대타 요청이 걸려 있어 삭제할 수 없습니다.")
+        }
+        // 이력(APPROVED/REJECTED) 대타 요청과 그 지원들을 함께 정리한다.
+        val swaps = swapRequestRepository.findByShiftId(shiftId)
+        val swapIds = swaps.mapNotNull { it.id }
+        if (swapIds.isNotEmpty()) {
+            swapApplicationRepository.deleteBySwapRequestIdIn(swapIds)
+            swapRequestRepository.deleteAll(swaps)
         }
         shiftRepository.delete(shift)
     }
