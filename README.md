@@ -1,150 +1,79 @@
 # PTManager Backend
 
-알바생·사장님을 연결하는 근무 스케줄·대타·근태 관리 앱 **PTManager**의 공통 백엔드.
-**Spring Boot (Kotlin, JDK 21) REST API** 서버로, 직원용 앱과 사장용 앱이 이 서버를 통해 동일한 근무·매장·대타 데이터를 공유한다.
+직원·사장 Android 앱이 근무 스케줄·대타·근태·매장 데이터를 공유하는 REST API 서버입니다.
 
-소규모 매장(카페·편의점·식당 등)의 단톡방·종이 근무표·수기 장부에 흩어져 있던 근무 운영을 하나로 디지털화하는 것이 목표다. 핵심은 **대타(대체 근무) 요청–지원–승인 워크플로우를 1급 기능으로** 다루고, **별도 하드웨어 없이 QR로 출근을 체크**하는 것이다.
+## 기술 스택
 
-## 프로젝트 구성 (3-tier)
+Kotlin · Spring Boot · Spring Data JPA · Spring Security · H2 / PostgreSQL · Flyway · JWT · FCM · S3
 
-| 리포지토리 | 설명 |
-| --- | --- |
-| **PTManagerBackend** (이 저장소) | 공통 REST API 서버 (Spring Boot · Kotlin) |
-| PTManagerEmployee | 직원용 안드로이드 앱 — 스케줄 확인, QR 출근, 대타 요청·지원 |
-| PTManagerEmployer | 사장용 안드로이드 앱 — 스케줄 편성, 대타 검토·승인, 출근 현황·인건비 |
+의존성은 [build.gradle.kts](build.gradle.kts)에서 관리합니다.
 
-두 앱은 동일한 5탭 골격(홈·스케줄·소통/승인·통계·내 정보)을 공유하되 역할(EMPLOYEE/EMPLOYER)에 따라 화면을 다르게 구성하며, API 명세를 기준 문서로 삼아 서버·클라이언트가 병렬 개발한다.
+## 시작하기
 
-## 기술 스택 (목표)
+### 사전 요구사항
 
-| 영역 | 기술 | 비고 |
-| --- | --- | --- |
-| 언어 | **Kotlin** (JDK 21) | |
-| 프레임워크 | Spring Boot 3.5 (Web / Data JPA / Validation / Actuator) | |
-| DB | PostgreSQL | 운영. 로컬은 임베디드 H2(`MODE=PostgreSQL`) |
-| ORM | Spring Data JPA + Hibernate | 연관관계 대신 plain `Long` FK 컬럼 |
-| 인증 | Spring Security + JWT (Bearer) | 역할 기반 RBAC |
-| 실시간 | WebSocket (STOMP) | 대타 요청 즉시 알림 |
-| 캐시 | Redis | 현재 근무자 목록·세션 |
-| 푸시 | FCM | 대타·근태·공지 알림 |
-| 파일 | AWS S3 | 공지 첨부 이미지 |
-| API 문서 | Swagger (SpringDoc) | 안드로이드 팀과 스펙 공유 |
-| 인프라 | AWS EC2 + RDS, GitHub Actions | 빌드/배포 |
-
-도메인 컨트롤러는 Auth · Workplace · User · Shift · SwapRequest · SwapApplication · JoinRequest · Notice · Handover · Notification · Payroll · Health 로 분리되며, 공통 `ApiExceptionHandler`로 일관된 에러 응답을 제공한다.
-
-## 실행
-
-JDK 21이 필요하다. `./gradlew`는 `JAVA_HOME`이 가리키는 JDK로 실행되므로 먼저 설정해야 한다.
-별도 JDK가 없으면 Android Studio 번들 JBR(`<AndroidStudio>/jbr`)을 그대로 써도 된다.
-
-### JAVA_HOME 설정
-
-> 경로 예시는 Android Studio 번들 JBR 기준이다. 설치 위치에 맞게 바꾼다.
-> (예: `D:\Program Files\Android\Android Studio\jbr`)
-
-**PowerShell — 현재 창에서만:**
-```powershell
-$env:JAVA_HOME = "D:\Program Files\Android\Android Studio\jbr"
-```
-
-**Git Bash — 현재 창에서만:**
-```bash
-export JAVA_HOME="D:/Program Files/Android/Android Studio/jbr"
-```
-
-**영구 설정 (새 터미널부터 적용):**
-```powershell
-setx JAVA_HOME "D:\Program Files\Android\Android Studio\jbr"
-```
-
-설정 확인:
-```bash
-java -version          # JAVA_HOME 적용 여부와 별개로 PATH의 java
-"$JAVA_HOME/bin/java" -version   # Git Bash
-```
+JDK 21이 필요합니다. `JAVA_HOME`이 해당 JDK를 가리키도록 설정합니다. Android Studio의 번들 JBR도 사용할 수 있습니다.
 
 ### 실행
 
+저장소 루트에서 실행합니다.
+
 ```bash
-./gradlew bootRun        # PowerShell에서는 .\gradlew bootRun
+./gradlew bootRun
 ```
 
-| 환경 | URL |
+Windows PowerShell에서는 `./gradlew` 대신 `.\gradlew`를 사용합니다.
+로컬 설정은 H2 인메모리 DB를 사용하므로 별도 DB 설치가 필요하지 않습니다.
+
+## 사용 방법
+
+### 로컬 접속
+
+| 대상 | 주소 |
 | --- | --- |
-| 로컬 | `http://localhost:8080` |
-| 안드로이드 에뮬레이터 | `http://10.0.2.2:8080` |
-| Swagger UI (로컬) | `http://localhost:8080/swagger-ui.html` |
-| OpenAPI JSON (로컬) | `http://localhost:8080/v3/api-docs` |
-| **운영 Swagger** | `http://<ElasticIP>:8080/swagger-ui.html` (RDS PostgreSQL) — 로컬 브라우저에서 접속해 운영 API 테스트 |
-| H2 콘솔 (로컬) | `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:ptmanager`, 사용자 `sa`) |
+| API | `http://localhost:8080` |
+| Android 에뮬레이터에서 API | `http://10.0.2.2:8080` |
+| Swagger UI | `http://localhost:8080/swagger-ui.html` |
+| OpenAPI | `http://localhost:8080/v3/api-docs` |
+| H2 콘솔 | `http://localhost:8080/h2-console` |
 
-> Swagger의 서버 URL은 "접속한 호스트" 기준이라, 로컬에서 열면 로컬을, 운영 주소로 열면 운영 서버를 테스트한다.
-> 보호된 API는 `POST /api/auth/login`으로 받은 `accessToken`을 우측 상단 **Authorize**에 입력하면 된다.
-
-## 동작 확인
+H2 콘솔의 JDBC URL은 `jdbc:h2:mem:ptmanager`, 사용자는 `sa`입니다.
+보호된 API는 로그인으로 받은 `accessToken`을 Swagger의 **Authorize**에 입력해 호출합니다.
 
 ```bash
-./gradlew test
-curl http://localhost:8080/api/health
-
-# 시드 계정으로 로그인
+curl http://localhost:8080/actuator/health
 curl -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"employee@ptmanager.test","password":"password"}'
 ```
 
-## 아키텍처
+### 데모 계정
 
-- 계층 구조: 컨트롤러 → 서비스 → Spring Data 리포지토리.
-- 영속화: **Spring Data JPA + 임베디드 H2**(`MODE=PostgreSQL`). 인메모리 데이터소스라 재시작마다 초기화되며 `config/DataSeeder`가 시드 데이터를 다시 적재한다. 도메인 타입은 JPA `@Entity` 클래스이고, 연관관계 대신 plain `Long` 외래키 컬럼을 써서 평면 JSON으로 직렬화된다.
-- PostgreSQL로 교체하려면 데이터소스만 재정의(예: `SPRING_DATASOURCE_URL`)하고 `org.postgresql:postgresql` 드라이버를 추가하면 된다 — 엔티티는 DB 비종속이다. `src/main/resources/application.yml` 참고.
-- 모든 에러는 `common/ApiExceptionHandler`를 통해 단일 `ApiError` 구조(`code`, `message`, `timestamp`, `fields`)로 반환된다: `400 BAD_REQUEST` / `400 VALIDATION_FAILED` / `404 NOT_FOUND`.
+로컬 DB는 재시작할 때 초기화됩니다. 사용자 테이블이 비어 있으면 [DataSeeder](src/main/kotlin/com/ptmanager/backend/config/DataSeeder.kt)가 샘플을 생성합니다.
+비밀번호는 모두 `password`, 시드 매장 초대코드는 `CAFE01`입니다.
 
-## API · 데이터 모델
+| 계정 | 역할 | 매장 |
+| --- | --- | --- |
+| `employer@ptmanager.test` | 사장 | PT Manager Cafe |
+| `employee@ptmanager.test` | 직원 | PT Manager Cafe |
+| `employee2@ptmanager.test` | 직원 | PT Manager Cafe |
+| `employee3@ptmanager.test` | 직원 | PT Manager Cafe |
+| `applicant@ptmanager.test` | 직원 | 미소속·가입 신청 대기 |
 
-- 전체 API 명세(목표): [API_SPEC.md](API_SPEC.md) — OpenAPI 3.0.3, 9개 태그 / 43개 엔드포인트.
-- 데이터 모델(목표): [ERD.md](ERD.md) — PostgreSQL 11개 테이블.
+근무·근태·공지·인수인계·대타·알림 샘플도 함께 생성됩니다. 샘플 구성은 `DataSeeder`에서 관리합니다.
 
-대타 요청은 `PENDING`으로 생성되어 사장의 처리에 따라 `APPROVED` / `REJECTED`로 전이된다. 승인 시 선택된 지원자가 확정 대타자로 지정되고, 해당 근무의 근무자가 대타자로 재배정된다(요청자 이력은 보존).
+## 테스트
 
-## 시드 데이터
+```bash
+./gradlew test
+```
 
-부팅 시 사용자 테이블이 비어 있으면 적재된다 (`config/DataSeeder`):
+자동 검증 설정은 [CI 워크플로](.github/workflows/ci.yml)를 참고합니다.
 
-| 계정 | 역할 | 비밀번호 | 매장 (초대코드) |
-| --- | --- | --- | --- |
-| `employer@ptmanager.test` | EMPLOYER | `password` | PT Manager Cafe (`CAFE01`) |
-| `employee@ptmanager.test` | EMPLOYEE | `password` | PT Manager Cafe (`CAFE01`) |
-| `employee2@ptmanager.test` | EMPLOYEE | `password` | PT Manager Cafe (`CAFE01`) |
-| `employee3@ptmanager.test` | EMPLOYEE | `password` | PT Manager Cafe (`CAFE01`) |
-| `applicant@ptmanager.test` | EMPLOYEE | `password` | (미소속 — 가입 신청 `PENDING`) |
+## 관련 문서
 
-시급은 계정마다 다르게(11,000~13,000원) 설정돼 인건비 화면이 구분된다. 함께 적재되는 데모 데이터:
-
-- **근무 스케줄**: 직원 3명에게 지난 14일~향후 7일치 근무. 지난 근무는 출퇴근 기록 포함(PRESENT/LATE/ABSENT 혼합)이라 누적 인건비·주차별 추이가 채워진다.
-- **공지** 3건, **인수인계** 4건(재고/기기/손님).
-- **대타 요청** 2건 — 지원자 2명이 붙은 `PENDING` 1건(사장 승인 대기), 대타 확정된 `APPROVED` 1건.
-- **가입 신청** 1건(`applicant@`), **알림** 4건(일부 미확인).
-
-## 구현 현황
-
-> [API_SPEC.md](API_SPEC.md)와 [ERD.md](ERD.md)의 **목표 설계**는 대부분 구현되어 있다. 남은 것은 실시간(WebSocket)·캐시(Redis)뿐이다.
-
-**구현 완료:**
-
-- **인증** — 회원가입 · 로그인 · 토큰 갱신(`refresh`) · 로그아웃. Spring Security + **JWT(Bearer)** 로 실제 서명·검증하며, `@PreAuthorize`로 역할 기반 권한(RBAC)을 적용한다 (`config/security`).
-- **매장** — 생성 · 조회 · 멤버 목록 · 초대코드/QR 토큰 발급 · 시급 수정 · 멤버 방출.
-- **근무** — 편성(CRUD) · **QR 출근/퇴근 체크** (`QrCodeService`가 서명·매장·수명을 검증).
-- **대타** — 요청 → **지원(application)** → 사장 승인/거절의 3단계 워크플로우. 승인 시 지원자가 확정 대타자로 지정되고 근무가 재배정된다.
-- **가입 신청** — 초대코드 신청 → 사장 승인/거절.
-- **공지** — 작성 · 목록(페이지네이션) · **첨부(S3)** · 읽음/안읽음.
-- **인수인계** — 카테고리별(재고/기기/손님) 작성 · 조회 · 삭제.
-- **알림** — 목록 · 안읽음 개수(배지) · 읽음 처리 · 알림 설정 · **FCM 디바이스 토큰** 등록.
-- **인건비** — 월별 · 주차별 집계(사장) · 직원 본인 월 급여(`GET /payroll/me`, 실근태 기준).
-- **운영** — PostgreSQL + Flyway 마이그레이션(V1–V3). FCM·S3는 설정 플래그로 실제 발송/업로드 ↔ 로그·메모리 스텁 전환.
-
-**미구현:**
-
-- **WebSocket(STOMP) 실시간 알림** — 현재는 FCM 푸시로 대체.
-- **Redis 캐시** — 현재는 DB 직접 조회.
+| 문서 | 내용 |
+| --- | --- |
+| [프로젝트 문서](https://github.com/PTManager/docs#관련-문서) | 요구사항·설계·작업 현황·배포 안내 |
+| [직원 앱](https://github.com/PTManager/EmployeeApp) | 직원 앱 설정·빌드·사용 |
+| [사장 앱](https://github.com/PTManager/EmployerApp) | 사장 앱 설정·빌드·사용 |

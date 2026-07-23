@@ -57,6 +57,11 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      # /actuator/health 는 무인증 공개(SecurityConfig). DB 다운이면 status=DOWN 이 되므로
+      # 배포·ALB 헬스체크에 그대로 쓴다. 내부 컴포넌트 이름은 노출하지 않는다.
+      show-details: never
 
 # To use PostgreSQL instead of the embedded H2 database, override the
 # datasource (e.g. via SPRING_DATASOURCE_URL) and add the
