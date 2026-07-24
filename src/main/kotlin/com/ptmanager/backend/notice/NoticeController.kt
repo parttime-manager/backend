@@ -1,12 +1,9 @@
 package com.ptmanager.backend.notice
 
-import com.ptmanager.backend.common.dto.PageResponse
+import com.ptmanager.backend.common.PageResponse
+import com.ptmanager.backend.common.pageRequest
 import com.ptmanager.backend.domain.NoticeAttachment
-import com.ptmanager.backend.notice.dto.CreateNoticeRequest
-import com.ptmanager.backend.notice.dto.NoticeResponse
-import com.ptmanager.backend.notice.dto.UnreadFlag
 import jakarta.validation.Valid
-import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -32,17 +29,8 @@ class NoticeController(
         @RequestParam workplaceId: Long,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
-    ): PageResponse<NoticeResponse> {
-        val pageable = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, 100))
-        val result = noticeService.findByWorkplace(workplaceId, pageable)
-        return PageResponse(
-            result.content,
-            result.number,
-            result.size,
-            result.totalElements,
-            result.totalPages,
-        )
-    }
+    ): PageResponse<NoticeResponse> =
+        PageResponse.of(noticeService.findByWorkplace(workplaceId, pageRequest(page, size)))
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

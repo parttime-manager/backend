@@ -1,10 +1,5 @@
 package com.ptmanager.backend.auth
 
-import com.ptmanager.backend.auth.dto.LoginRequest
-import com.ptmanager.backend.auth.dto.LogoutRequest
-import com.ptmanager.backend.auth.dto.RefreshRequest
-import com.ptmanager.backend.auth.dto.SignupRequest
-import com.ptmanager.backend.auth.dto.TokenResponse
 import com.ptmanager.backend.domain.User
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus

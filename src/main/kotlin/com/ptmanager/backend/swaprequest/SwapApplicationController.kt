@@ -1,7 +1,6 @@
 package com.ptmanager.backend.swaprequest
 
 import com.ptmanager.backend.domain.SwapRequestStatus
-import com.ptmanager.backend.swaprequest.dto.SwapApplicationResponse
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping

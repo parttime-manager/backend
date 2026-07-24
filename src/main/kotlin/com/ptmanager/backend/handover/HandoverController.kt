@@ -1,8 +1,6 @@
 package com.ptmanager.backend.handover
 
 import com.ptmanager.backend.domain.HandoverCategory
-import com.ptmanager.backend.handover.dto.CreateHandoverRequest
-import com.ptmanager.backend.handover.dto.HandoverResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal

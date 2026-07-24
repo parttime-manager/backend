@@ -2,10 +2,6 @@ package com.ptmanager.backend.swaprequest
 
 import com.ptmanager.backend.domain.SwapRequest
 import com.ptmanager.backend.domain.SwapRequestStatus
-import com.ptmanager.backend.swaprequest.dto.ApproveSwapRequest
-import com.ptmanager.backend.swaprequest.dto.CreateSwapRequest
-import com.ptmanager.backend.swaprequest.dto.SwapApplicationResponse
-import com.ptmanager.backend.swaprequest.dto.SwapRequestDetail
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize

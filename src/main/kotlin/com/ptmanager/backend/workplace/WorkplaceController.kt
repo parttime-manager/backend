@@ -3,9 +3,6 @@ package com.ptmanager.backend.workplace
 import com.ptmanager.backend.domain.User
 import com.ptmanager.backend.domain.UserRole
 import com.ptmanager.backend.domain.Workplace
-import com.ptmanager.backend.workplace.dto.CreateWorkplaceRequest
-import com.ptmanager.backend.workplace.dto.QrTokenResponse
-import com.ptmanager.backend.workplace.dto.UpdateWageRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize

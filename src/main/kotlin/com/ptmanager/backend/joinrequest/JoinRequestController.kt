@@ -1,9 +1,6 @@
 package com.ptmanager.backend.joinrequest
 
 import com.ptmanager.backend.domain.JoinRequestStatus
-import com.ptmanager.backend.joinrequest.dto.CreateJoinRequest
-import com.ptmanager.backend.joinrequest.dto.DecisionRequest
-import com.ptmanager.backend.joinrequest.dto.JoinRequestResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize

@@ -1,10 +1,30 @@
-package com.ptmanager.backend.shift.dto
+package com.ptmanager.backend.shift
 
 import com.ptmanager.backend.domain.AttendanceStatus
 import com.ptmanager.backend.domain.Shift
+import jakarta.validation.constraints.NotBlank
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+
+data class CreateShiftRequest(
+    val workplaceId: Long,
+    val employeeId: Long,
+    val workDate: LocalDate,
+    val startTime: LocalTime,
+    val endTime: LocalTime,
+)
+
+data class UpdateShiftRequest(
+    val employeeId: Long? = null,
+    val workDate: LocalDate? = null,
+    val startTime: LocalTime? = null,
+    val endTime: LocalTime? = null,
+)
+
+data class CheckInRequest(
+    @field:NotBlank val qrToken: String,
+)
 
 /** 근무 응답. 명세 Shift 스키마대로 근무자 표시명(employeeName)을 포함한다. */
 data class ShiftResponse(

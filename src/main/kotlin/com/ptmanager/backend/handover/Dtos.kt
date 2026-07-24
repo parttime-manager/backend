@@ -1,7 +1,15 @@
-package com.ptmanager.backend.handover.dto
+package com.ptmanager.backend.handover
 
 import com.ptmanager.backend.domain.HandoverCategory
+import jakarta.validation.constraints.NotBlank
 import java.time.Instant
+
+data class CreateHandoverRequest(
+    val workplaceId: Long,
+    val category: HandoverCategory,
+    @field:NotBlank val title: String,
+    @field:NotBlank val content: String,
+)
 
 /** 인수인계 노트 응답. 작성자명을 포함한다. */
 data class HandoverResponse(

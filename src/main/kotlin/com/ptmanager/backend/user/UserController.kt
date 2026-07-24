@@ -3,9 +3,6 @@ package com.ptmanager.backend.user
 import com.ptmanager.backend.domain.DeviceToken
 import com.ptmanager.backend.domain.NotificationSetting
 import com.ptmanager.backend.domain.User
-import com.ptmanager.backend.user.dto.NotificationSettingUpdate
-import com.ptmanager.backend.user.dto.RegisterDeviceTokenRequest
-import com.ptmanager.backend.user.dto.UpdateProfileRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal

@@ -1,10 +1,6 @@
 package com.ptmanager.backend.shift
 
 import com.ptmanager.backend.domain.AttendanceStatus
-import com.ptmanager.backend.shift.dto.CheckInRequest
-import com.ptmanager.backend.shift.dto.CreateShiftRequest
-import com.ptmanager.backend.shift.dto.ShiftResponse
-import com.ptmanager.backend.shift.dto.UpdateShiftRequest
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
