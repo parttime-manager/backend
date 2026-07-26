@@ -1,19 +1,18 @@
 package com.ptmanager.backend.payroll
 
 import com.ptmanager.backend.common.access.WorkplaceAccessGuard
+import com.ptmanager.backend.common.workedMinutes
 import com.ptmanager.backend.domain.AttendanceStatus
+import com.ptmanager.backend.domain.Shift
 import com.ptmanager.backend.domain.UserRole
-import com.ptmanager.backend.payroll.dto.LaborCostReport
-import com.ptmanager.backend.payroll.dto.LaborCostReport.EmployeeCost
-import com.ptmanager.backend.payroll.dto.WeeklyPayrollSummary.WeeklyCost
+import com.ptmanager.backend.payroll.LaborCostReport.EmployeeCost
+import com.ptmanager.backend.payroll.WeeklyPayrollSummary.WeeklyCost
 import com.ptmanager.backend.repository.ShiftRepository
 import com.ptmanager.backend.repository.UserRepository
 import com.ptmanager.backend.repository.WorkplaceRepository
-import com.ptmanager.backend.domain.Shift
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.YearMonth
 import java.util.NoSuchElementException
 
@@ -26,20 +25,10 @@ class LaborCostService(
 ) {
 
     fun calculate(workplaceId: Long, from: LocalDate, to: LocalDate): LaborCostReport {
-        accessGuard.requireMemberOf(workplaceId)
-        if (!workplaceRepository.existsById(workplaceId)) {
-            throw NoSuchElementException("Workplace not found.")
-        }
-        require(!to.isBefore(from)) { "'to' must not be before 'from'." }
-
-        val shifts = shiftRepository.findByWorkplaceIdAndWorkDateBetween(workplaceId, from, to)
-            .filter { it.attendanceStatus != AttendanceStatus.ABSENT } // 결근은 집계 제외
-
-        val minutesByEmployee = LinkedHashMap<Long, Long>()
-        for (shift in shifts) {
-            val minutes = actualOrScheduledMinutes(shift)
-            minutesByEmployee.merge(shift.employeeId, minutes) { a, b -> a + b }
-        }
+        val minutesByEmployee = payableShifts(workplaceId, from, to)
+            .groupingBy { it.employeeId }
+            .fold(0L) { minutes, shift -> minutes + actualOrScheduledMinutes(shift) }
+            .toMutableMap()
         // 근무 기록이 없는 직원도 0원으로 목록에 포함한다.
         for (member in userRepository.findByWorkplaceIdAndRole(workplaceId, UserRole.EMPLOYEE)) {
             minutesByEmployee.putIfAbsent(member.id!!, 0L)
@@ -47,18 +36,15 @@ class LaborCostService(
 
         val users = userRepository.findAllById(minutesByEmployee.keys).associateBy { it.id }
 
-        val employees = ArrayList<EmployeeCost>()
-        var totalCost = 0L
-        for ((employeeId, totalMinutes) in minutesByEmployee) {
+        val employees = minutesByEmployee.map { (employeeId, totalMinutes) ->
             val user = users[employeeId]
             val hourlyWage = user?.hourlyWage ?: 0
             val name = user?.name ?: "(unknown)"
             val cost = totalMinutes * hourlyWage / 60
-            totalCost += cost
-            employees.add(EmployeeCost(employeeId, name, totalMinutes, hourlyWage, cost))
+            EmployeeCost(employeeId, name, totalMinutes, hourlyWage, cost)
         }
 
-        return LaborCostReport(workplaceId, from, to, totalCost, employees)
+        return LaborCostReport(workplaceId, from, to, employees.sumOf { it.cost }, employees)
     }
 
     /**
@@ -66,13 +52,7 @@ class LaborCostService(
      * 근무는 한 번만 조회해 일자로 버킷에 분배한다. (calculate를 4번 부르지 않음)
      */
     fun weeklyTotals(workplaceId: Long, month: YearMonth, employeeId: Long? = null): List<WeeklyCost> {
-        accessGuard.requireMemberOf(workplaceId)
-        if (!workplaceRepository.existsById(workplaceId)) {
-            throw NoSuchElementException("Workplace not found.")
-        }
-        val shifts = shiftRepository
-            .findByWorkplaceIdAndWorkDateBetween(workplaceId, month.atDay(1), month.atEndOfMonth())
-            .filter { it.attendanceStatus != AttendanceStatus.ABSENT }
+        val shifts = payableShifts(workplaceId, month.atDay(1), month.atEndOfMonth())
             .filter { employeeId == null || it.employeeId == employeeId }
         val wages = userRepository.findAllById(shifts.map { it.employeeId }.distinct())
             .associate { it.id to it.hourlyWage }
@@ -86,6 +66,16 @@ class LaborCostService(
         return buckets.mapIndexed { i, amount -> WeeklyCost(week = i + 1, amount = amount) }
     }
 
+    private fun payableShifts(workplaceId: Long, from: LocalDate, to: LocalDate): List<Shift> {
+        accessGuard.requireMemberOf(workplaceId)
+        if (!workplaceRepository.existsById(workplaceId)) {
+            throw NoSuchElementException("Workplace not found.")
+        }
+        require(!to.isBefore(from)) { "'to' must not be before 'from'." }
+        return shiftRepository.findByWorkplaceIdAndWorkDateBetween(workplaceId, from, to)
+            .filter { it.attendanceStatus != AttendanceStatus.ABSENT }
+    }
+
     /** 출퇴근 기록이 모두 있으면 실제 근무시간, 없으면 편성 시간으로 계산한다. */
     private fun actualOrScheduledMinutes(shift: Shift): Long {
         val inAt = shift.checkedInAt
@@ -95,14 +85,6 @@ class LaborCostService(
         } else {
             workedMinutes(shift.startTime, shift.endTime)
         }
-    }
-
-    /** 근무 시간(분). 야간 교대(end ≤ start)는 익일로 보정해 양수로 계산한다. */
-    private fun workedMinutes(start: LocalTime, end: LocalTime): Long {
-        val startMin = (start.toSecondOfDay() / 60).toLong()
-        var endMin = (end.toSecondOfDay() / 60).toLong()
-        if (endMin <= startMin) endMin += 24 * 60
-        return endMin - startMin
     }
 
     companion object {

@@ -1,8 +1,9 @@
 package com.ptmanager.backend.shift
 
-import com.ptmanager.backend.common.orNotFound
-
 import com.ptmanager.backend.common.access.WorkplaceAccessGuard
+import com.ptmanager.backend.common.nameOf
+import com.ptmanager.backend.common.namesOf
+import com.ptmanager.backend.common.orNotFound
 import com.ptmanager.backend.domain.AttendanceStatus
 import com.ptmanager.backend.domain.NotificationType
 import com.ptmanager.backend.domain.Shift
@@ -15,7 +16,6 @@ import com.ptmanager.backend.repository.SwapRequestRepository
 import com.ptmanager.backend.repository.UserRepository
 import com.ptmanager.backend.repository.WorkplaceRepository
 import java.time.Duration
-import com.ptmanager.backend.shift.dto.ShiftResponse
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -23,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.util.NoSuchElementException
 
 @Service
 class ShiftService(
@@ -74,15 +74,13 @@ class ShiftService(
         // 초안(미발행) 근무는 사장에게만 보인다. 직원 등 그 외에게는 발행된 것만 노출.
         val shifts = if (viewerIsEmployer()) statusFiltered else statusFiltered.filter { it.published }
 
-        val names = userRepository.findAllById(shifts.map { it.employeeId }.distinct())
-            .associate { it.id to it.name }
-        return shifts.map { toResponse(it, names[it.employeeId]) }
+        val names = userRepository.namesOf(shifts.map { it.employeeId })
+        return shifts.map { ShiftResponse.from(it, names[it.employeeId]) }
     }
 
     fun getShiftDetail(id: Long): ShiftResponse {
         val shift = getShift(id)
-        val base = toResponse(shift, employeeNameOf(shift.employeeId))
-        return base.copy(
+        return shift.toResponse().copy(
             workplaceName = workplaceRepository.findById(shift.workplaceId).orElse(null)?.name,
             coworkers = coworkersOf(shift),
             estimatedPay = estimatedPayOf(shift),
@@ -90,20 +88,18 @@ class ShiftService(
     }
 
     /** 같은 매장·같은 날짜의 다른 근무자 이름(중복 제거). 본인 제외. */
-    private fun coworkersOf(shift: Shift): List<String> =
-        shiftRepository.findByWorkplaceIdAndWorkDateBetween(shift.workplaceId, shift.workDate, shift.workDate)
+    private fun coworkersOf(shift: Shift): List<String> {
+        val others = shiftRepository
+            .findByWorkplaceIdAndWorkDateBetween(shift.workplaceId, shift.workDate, shift.workDate)
             .filter { it.id != shift.id && it.employeeId != shift.employeeId }
-            .mapNotNull { employeeNameOf(it.employeeId) }
-            .distinct()
+        val names = userRepository.namesOf(others.map { it.employeeId })
+        return others.mapNotNull { names[it.employeeId] }.distinct()
+    }
 
-    /** 시급 × 근무시간(분). 야간 교대(end ≤ start)는 익일 종료로 보정. */
+    /** 시급 × 편성 근무시간(분). */
     private fun estimatedPayOf(shift: Shift): Int? {
         val wage = userRepository.findById(shift.employeeId).orElse(null)?.hourlyWage ?: return null
-        val endDate = if (shift.endTime <= shift.startTime) shift.workDate.plusDays(1) else shift.workDate
-        val minutes = Duration.between(
-            shift.workDate.atTime(shift.startTime),
-            endDate.atTime(shift.endTime),
-        ).toMinutes()
+        val minutes = Duration.between(shift.workDate.atTime(shift.startTime), scheduledEnd(shift)).toMinutes()
         return (wage * minutes / 60).toInt()
     }
 
@@ -129,7 +125,7 @@ class ShiftService(
                 published = false,
             ),
         )
-        return toResponse(shift, employeeNameOf(employeeId))
+        return shift.toResponse()
     }
 
     @Transactional
@@ -151,8 +147,16 @@ class ShiftService(
         requireNoOverlap(shift.employeeId, shift.workDate, shift.startTime, shift.endTime, excludeShiftId = shift.id)
         val saved = shiftRepository.save(shift)
         // 초안 수정은 조용히, 이미 발행된 근무를 바꾼 경우에만 변경 알림.
-        if (saved.published) notifyScheduleChanged(saved, "근무 편성이 변경되었습니다.")
-        return toResponse(saved, employeeNameOf(saved.employeeId))
+        if (saved.published) {
+            notificationService.notify(
+                saved.employeeId,
+                NotificationType.SCHEDULE_CHANGED,
+                "근무 편성이 변경되었습니다.",
+                targetType = "SHIFT",
+                targetId = saved.id,
+            )
+        }
+        return saved.toResponse()
     }
 
     /**
@@ -198,10 +202,7 @@ class ShiftService(
 
     @Transactional
     fun checkIn(shiftId: Long, currentUserId: Long, qrToken: String): ShiftResponse {
-        val shift = getShift(shiftId)
-        if (shift.employeeId != currentUserId) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인 근무만 출근 체크할 수 있습니다.")
-        }
+        val shift = getOwnShift(shiftId, currentUserId, "출근")
         qrCodeService.verify(shift.workplaceId, qrToken)
         if (shift.checkedInAt != null) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 출근 처리된 근무입니다.")
@@ -217,15 +218,12 @@ class ShiftService(
             if (now.isAfter(scheduledStart)) AttendanceStatus.LATE else AttendanceStatus.PRESENT
 
         val saved = shiftRepository.save(shift)
-        return toResponse(saved, employeeNameOf(saved.employeeId))
+        return saved.toResponse()
     }
 
     @Transactional
     fun checkOut(shiftId: Long, currentUserId: Long, qrToken: String): ShiftResponse {
-        val shift = getShift(shiftId)
-        if (shift.employeeId != currentUserId) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인 근무만 퇴근 체크할 수 있습니다.")
-        }
+        val shift = getOwnShift(shiftId, currentUserId, "퇴근")
         if (shift.checkedInAt == null) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "출근하지 않은 근무입니다.")
         }
@@ -236,7 +234,7 @@ class ShiftService(
 
         shift.checkedOutAt = Instant.now()
         val saved = shiftRepository.save(shift)
-        return toResponse(saved, employeeNameOf(saved.employeeId))
+        return saved.toResponse()
     }
 
     /**
@@ -252,24 +250,35 @@ class ShiftService(
             LocalDate.now(),
         )
         for (shift in candidates) {
-            if (now.isAfter(scheduledEndInstant(shift))) {
+            if (now.isAfter(scheduledEnd(shift).atZone(ZoneId.systemDefault()).toInstant())) {
                 shift.attendanceStatus = AttendanceStatus.ABSENT
             }
         }
         // JPA dirty checking이 트랜잭션 커밋 시 반영한다.
     }
 
-    /** 야간 교대(end ≤ start)는 익일 종료로 보정. */
-    private fun scheduledEndInstant(shift: Shift): Instant {
-        val endDate =
-            if (shift.endTime <= shift.startTime) shift.workDate.plusDays(1) else shift.workDate
-        return endDate.atTime(shift.endTime).atZone(ZoneId.systemDefault()).toInstant()
-    }
+    /** 편성 종료 시각. 야간 교대(end ≤ start)는 익일 종료로 보정. */
+    private fun scheduledEnd(shift: Shift): LocalDateTime =
+        (if (shift.endTime <= shift.startTime) shift.workDate.plusDays(1) else shift.workDate)
+            .atTime(shift.endTime)
+
+    /** 표시용 근무자 이름을 채운 응답. */
+    private fun Shift.toResponse(): ShiftResponse =
+        ShiftResponse.from(this, userRepository.nameOf(employeeId))
 
     private fun getShift(id: Long): Shift {
         val shift = shiftRepository.findById(id)
             .orNotFound("Shift not found.")
         accessGuard.requireMemberOf(shift.workplaceId)
+        return shift
+    }
+
+    /** 본인 근무만 출퇴근 체크할 수 있다. */
+    private fun getOwnShift(id: Long, currentUserId: Long, action: String): Shift {
+        val shift = getShift(id)
+        if (shift.employeeId != currentUserId) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "본인 근무만 $action 체크할 수 있습니다.")
+        }
         return shift
     }
 
@@ -305,19 +314,4 @@ class ShiftService(
         }
     }
 
-    private fun employeeNameOf(employeeId: Long): String? =
-        userRepository.findById(employeeId).orElse(null)?.name
-
-    private fun notifyScheduleChanged(shift: Shift, message: String) {
-        notificationService.notify(
-            shift.employeeId,
-            NotificationType.SCHEDULE_CHANGED,
-            message,
-            targetType = "SHIFT",
-            targetId = shift.id,
-        )
-    }
-
-    private fun toResponse(shift: Shift, employeeName: String?): ShiftResponse =
-        ShiftResponse.from(shift, employeeName)
 }

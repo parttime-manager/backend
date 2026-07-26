@@ -1,12 +1,12 @@
 package com.ptmanager.backend.joinrequest
 
-import com.ptmanager.backend.common.orNotFound
-
 import com.ptmanager.backend.common.access.WorkplaceAccessGuard
+import com.ptmanager.backend.common.nameOf
+import com.ptmanager.backend.common.namesOf
+import com.ptmanager.backend.common.orNotFound
 import com.ptmanager.backend.domain.JoinRequest
 import com.ptmanager.backend.domain.JoinRequestStatus
 import com.ptmanager.backend.domain.NotificationType
-import com.ptmanager.backend.joinrequest.dto.JoinRequestResponse
 import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.JoinRequestRepository
 import com.ptmanager.backend.repository.UserRepository
@@ -29,8 +29,7 @@ class JoinRequestService(
     fun findByWorkplace(workplaceId: Long, status: JoinRequestStatus): List<JoinRequestResponse> {
         accessGuard.requireMemberOf(workplaceId)
         val requests = joinRequestRepository.findByWorkplaceIdAndStatusOrderByCreatedAtDesc(workplaceId, status)
-        val names = userRepository.findAllById(requests.map { it.userId }.distinct())
-            .associate { it.id to it.name }
+        val names = userRepository.namesOf(requests.map { it.userId })
         return requests.map { toResponse(it, names[it.userId]) }
     }
 
@@ -55,7 +54,7 @@ class JoinRequestService(
                 status = JoinRequestStatus.PENDING,
             ),
         )
-        return toResponse(saved, userNameOf(userId))
+        return toResponse(saved, userRepository.nameOf(userId))
     }
 
     @Transactional
@@ -86,11 +85,8 @@ class JoinRequestService(
             targetType = "JOIN_REQUEST",
             targetId = saved.id,
         )
-        return toResponse(saved, userNameOf(saved.userId))
+        return toResponse(saved, userRepository.nameOf(saved.userId))
     }
-
-    private fun userNameOf(userId: Long): String? =
-        userRepository.findById(userId).orElse(null)?.name
 
     private fun toResponse(request: JoinRequest, userName: String?): JoinRequestResponse =
         JoinRequestResponse(

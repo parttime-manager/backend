@@ -1,13 +1,13 @@
 package com.ptmanager.backend.notice
 
-import com.ptmanager.backend.common.orNotFound
-
 import com.ptmanager.backend.common.access.WorkplaceAccessGuard
+import com.ptmanager.backend.common.nameOf
+import com.ptmanager.backend.common.namesOf
+import com.ptmanager.backend.common.orNotFound
 import com.ptmanager.backend.common.storage.StorageService
 import com.ptmanager.backend.domain.Notice
 import com.ptmanager.backend.domain.NoticeAttachment
 import com.ptmanager.backend.domain.NotificationType
-import com.ptmanager.backend.notice.dto.NoticeResponse
 import com.ptmanager.backend.notification.NotificationService
 import com.ptmanager.backend.repository.NoticeAttachmentRepository
 import com.ptmanager.backend.repository.NoticeRepository
@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import java.time.Instant
-import java.util.NoSuchElementException
 
 @Service
 class NoticeService(
@@ -35,8 +34,7 @@ class NoticeService(
         val page = noticeRepository.findByWorkplaceIdOrderByCreatedAtDesc(workplaceId, pageable)
         val notices = page.content
 
-        val authorNames = userRepository.findAllById(notices.map { it.authorId }.distinct())
-            .associate { it.id to it.name }
+        val authorNames = userRepository.namesOf(notices.map { it.authorId })
         val attachmentsByNotice = noticeAttachmentRepository
             .findByNoticeIdIn(notices.mapNotNull { it.id })
             .groupBy { it.noticeId }
@@ -48,7 +46,8 @@ class NoticeService(
 
     fun findById(id: Long): NoticeResponse {
         val notice = getNotice(id)
-        return toResponse(notice, authorNameOf(notice.authorId), attachmentsOf(notice.id))
+        val attachments = notice.id?.let { noticeAttachmentRepository.findByNoticeId(it) } ?: emptyList()
+        return toResponse(notice, userRepository.nameOf(notice.authorId), attachments)
     }
 
     @Transactional
@@ -78,7 +77,7 @@ class NoticeService(
             targetType = "NOTICE",
             targetId = notice.id,
         )
-        return toResponse(notice, authorNameOf(authorId), attachments)
+        return toResponse(notice, userRepository.nameOf(authorId), attachments)
     }
 
     @Transactional
@@ -118,12 +117,6 @@ class NoticeService(
         accessGuard.requireMemberOf(notice.workplaceId)
         return notice
     }
-
-    private fun authorNameOf(authorId: Long): String? =
-        userRepository.findById(authorId).orElse(null)?.name
-
-    private fun attachmentsOf(noticeId: Long?): List<NoticeAttachment> =
-        if (noticeId == null) emptyList() else noticeAttachmentRepository.findByNoticeId(noticeId)
 
     private fun toResponse(
         notice: Notice,

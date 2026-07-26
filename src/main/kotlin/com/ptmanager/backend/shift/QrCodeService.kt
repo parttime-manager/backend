@@ -24,8 +24,10 @@ class QrCodeService(
     private val latestIssuedAt = ConcurrentHashMap<Long, Long>()
 
     /** 해당 매장의 현재 QR 토큰을 발급한다. (사장 앱이 매장에 게시할 QR 생성용) */
-    fun issue(workplaceId: Long): String {
-        val issuedAt = Instant.now().epochSecond
+    fun issue(workplaceId: Long): String = issue(workplaceId, Instant.now().epochSecond)
+
+    /** 발급 시각을 지정한다. 만료 경계 테스트용 시임(seam). */
+    internal fun issue(workplaceId: Long, issuedAt: Long): String {
         latestIssuedAt[workplaceId] = issuedAt
         val payload = "wp$workplaceId:$issuedAt"
         return "$payload:${sign(payload)}"

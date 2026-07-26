@@ -1,10 +1,11 @@
 package com.ptmanager.backend.handover
 
 import com.ptmanager.backend.common.access.WorkplaceAccessGuard
+import com.ptmanager.backend.common.nameOf
+import com.ptmanager.backend.common.namesOf
 import com.ptmanager.backend.common.orNotFound
 import com.ptmanager.backend.domain.HandoverCategory
 import com.ptmanager.backend.domain.HandoverNote
-import com.ptmanager.backend.handover.dto.HandoverResponse
 import com.ptmanager.backend.repository.HandoverNoteRepository
 import com.ptmanager.backend.repository.UserRepository
 import org.springframework.http.HttpStatus
@@ -27,8 +28,7 @@ class HandoverService(
         } else {
             handoverNoteRepository.findByWorkplaceIdAndCategoryOrderByCreatedAtDesc(workplaceId, category)
         }
-        val authorNames = userRepository.findAllById(notes.map { it.authorId }.distinct())
-            .associate { it.id to it.name }
+        val authorNames = userRepository.namesOf(notes.map { it.authorId })
         return notes.map { toResponse(it, authorNames[it.authorId]) }
     }
 
@@ -50,7 +50,7 @@ class HandoverService(
                 content = content,
             ),
         )
-        return toResponse(note, authorNameOf(authorId))
+        return toResponse(note, userRepository.nameOf(authorId))
     }
 
     @Transactional
@@ -63,9 +63,6 @@ class HandoverService(
         }
         handoverNoteRepository.delete(note)
     }
-
-    private fun authorNameOf(authorId: Long): String? =
-        userRepository.findById(authorId).orElse(null)?.name
 
     private fun toResponse(note: HandoverNote, authorName: String?): HandoverResponse =
         HandoverResponse(

@@ -2,7 +2,6 @@ package com.ptmanager.backend.auth
 
 import com.ptmanager.backend.common.orNotFound
 
-import com.ptmanager.backend.auth.dto.TokenResponse
 import com.ptmanager.backend.config.security.JwtTokenProvider
 import com.ptmanager.backend.domain.User
 import com.ptmanager.backend.domain.UserRole
@@ -13,7 +12,6 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.util.NoSuchElementException
 
 @Service
 class AuthService(

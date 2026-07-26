@@ -27,6 +27,7 @@ class NotificationService(
     fun unreadCount(userId: Long): Long =
         notificationRepository.countByUserIdAndReadFalse(userId)
 
+    /** 알림 1건. 트랜잭션 보장을 위해 프록시를 타야 하므로 @Transactional 을 유지한다. */
     @Transactional
     fun notify(
         userId: Long,
@@ -34,22 +35,7 @@ class NotificationService(
         message: String,
         targetType: String? = null,
         targetId: Long? = null,
-    ): Notification {
-        // 인앱 인박스에는 항상 적재한다.
-        val notification = notificationRepository.save(
-            Notification(
-                userId = userId,
-                type = type,
-                message = message,
-                targetType = targetType,
-                targetId = targetId,
-                read = false,
-            ),
-        )
-        // FCM 푸시는 트랜잭션 커밋 후에만 나가도록 이벤트로 넘긴다. (NotificationPushListener)
-        eventPublisher.publishEvent(PushRequested(listOf(userId), type, message, targetType, targetId))
-        return notification
-    }
+    ) = notifyAll(listOf(userId), type, message, targetType, targetId)
 
     /** 여러 사용자에게 같은 알림을 발송한다. (대타 요청·공지 등 fan-out) */
     @Transactional
@@ -61,7 +47,8 @@ class NotificationService(
         targetId: Long? = null,
     ) {
         if (userIds.isEmpty()) return
-        // 인앱 알림은 한 번에 배치 저장하고, 푸시는 커밋 후 멀티캐스트 1회로 묶는다.
+        // 인앱 인박스에는 한 번에 배치 저장하고,
+        // FCM 푸시는 트랜잭션 커밋 후에만 나가도록 이벤트로 넘긴다. (NotificationPushListener)
         notificationRepository.saveAll(
             userIds.map { userId ->
                 Notification(
