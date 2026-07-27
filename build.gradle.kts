@@ -25,7 +25,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:2.8.6")
 
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
@@ -58,7 +58,7 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-// 배포 jar 이름을 고정한다(CD 스크립트·systemd가 ptmanager.jar 를 참조).
+// 수동 배포·systemd에서 참조하는 jar 이름을 고정한다.
 tasks.withType<BootJar> {
     archiveFileName.set("ptmanager.jar")
 }

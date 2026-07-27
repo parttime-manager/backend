@@ -1,21 +1,27 @@
 package com.ptmanager.backend.api
 
 import com.jayway.jsonpath.JsonPath
-import com.ptmanager.backend.shift.QrCodeService
+import com.ptmanager.backend.application.shift.QrCodeService
 import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.contains
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.Instant
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -26,6 +32,22 @@ class BaselineApiTests {
 
     @Autowired
     private lateinit var qrCodeService: QrCodeService
+
+    @Test
+    fun qrIssuanceRequiresPostAndSafeRequestsDoNotRotateTheToken() {
+        val (token, _) = signupReturning("qr-http@ptmanager.test", "QR owner", "EMPLOYER")
+        val (workplaceId, _) = createWorkplace(token, "QR HTTP contract")
+        val previous = qrCodeService.issue(workplaceId, Instant.now().epochSecond - 1)
+        val path = "/api/workplaces/$workplaceId/qr-token"
+        for (request in listOf(get(path), org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head(path))) {
+            mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer $token"))
+                .andExpect(status().isMethodNotAllowed)
+            qrCodeService.verify(workplaceId, previous)
+        }
+        mockMvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, "Bearer $token"))
+            .andExpect(status().isOk).andExpect(jsonPath("$.qrToken").isNotEmpty)
+        assertThrows<IllegalArgumentException> { qrCodeService.verify(workplaceId, previous) }
+    }
 
     private fun signupReturning(email: String, name: String, role: String): Pair<String, Long> {
         val body = mockMvc.perform(
@@ -90,6 +112,14 @@ class BaselineApiTests {
         return id.toLong()
     }
 
+    private fun approve(employerToken: String, swapRequestId: Long, applicantId: Long) =
+        mockMvc.perform(
+            post("/api/swap-requests/$swapRequestId/approve")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $employerToken")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"applicantId":$applicantId}"""),
+        )
+
     private fun loginAs(email: String): String {
         val response = mockMvc.perform(
             post("/api/auth/login")
@@ -104,14 +134,20 @@ class BaselineApiTests {
     }
 
     @Test
-    fun healthReturnsUp() {
-        mockMvc.perform(get("/api/health"))
+    fun healthIsPublicAndIncludesDb() {
+        // 무인증 공개 + DB 인디케이터 포함(H2 다운이면 DOWN). 상세는 숨긴다.
+        mockMvc.perform(get("/actuator/health"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status", `is`("UP")))
+            .andExpect(jsonPath("$.components").doesNotExist())
     }
 
     @Test
     fun openApiDocIsServed() {
+        mockMvc.perform(get("/docs"))
+            .andExpect(status().isOk)
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl("/docs.html"))
+
         mockMvc.perform(get("/v3/api-docs"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.info.title", `is`("PTManager API")))
@@ -623,5 +659,86 @@ class BaselineApiTests {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.status", `is`("PENDING")))
+    }
+
+    @Test
+    fun qrTokenRejectedPastMaxAge() {
+        val now = Instant.now().epochSecond
+        // 만료 직전(59초)은 통과, 만료 후(61초)는 거부. (qr.max-age-seconds=60)
+        qrCodeService.verify(QR_TEST_WORKPLACE, qrCodeService.issue(QR_TEST_WORKPLACE, now - 59))
+        val expired = assertThrows<IllegalArgumentException> {
+            qrCodeService.verify(QR_TEST_WORKPLACE, qrCodeService.issue(QR_TEST_WORKPLACE, now - 61))
+        }
+        assertTrue(expired.message!!.contains("만료"))
+    }
+
+    @Test
+    fun secondApproveIsRejectedAndFirstSubstituteKept() {
+        val (eToken, _) = signupReturning("dup-boss@ptmanager.test", "사장", "EMPLOYER")
+        val (wId, invite) = createWorkplace(eToken, "동시 승인 매장")
+        val (aToken, aId) = signupReturning("dup-a@ptmanager.test", "에이", "EMPLOYEE")
+        val (bToken, bId) = signupReturning("dup-b@ptmanager.test", "비", "EMPLOYEE")
+        val (cToken, cId) = signupReturning("dup-c@ptmanager.test", "씨", "EMPLOYEE")
+        joinAndApprove(aToken, invite, eToken)
+        joinAndApprove(bToken, invite, eToken)
+        joinAndApprove(cToken, invite, eToken)
+
+        val shift = createShift(eToken, wId, aId, "09:00:00", "14:00:00")
+        val swap = createSwap(aToken, shift)
+        listOf(bToken, cToken).forEach {
+            mockMvc.perform(
+                post("/api/swap-requests/$swap/applications").header(HttpHeaders.AUTHORIZATION, "Bearer $it"),
+            ).andExpect(status().isCreated)
+        }
+
+        approve(eToken, swap, bId).andExpect(status().isOk)
+        // 두 번째 승인은 markApproved 영향 행 0 → 409, 상태는 그대로 유지된다.
+        approve(eToken, swap, cId).andExpect(status().isConflict)
+
+        mockMvc.perform(get("/api/swap-requests/$swap").header(HttpHeaders.AUTHORIZATION, "Bearer $eToken"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status", `is`("APPROVED")))
+            .andExpect(jsonPath("$.substituteId", `is`(bId.toInt())))
+            .andExpect(jsonPath("$.requesterId", `is`(aId.toInt())))
+            .andExpect(jsonPath("$.shift.employeeId", `is`(bId.toInt())))
+            .andExpect(jsonPath("$.applications[?(@.applicantId == $bId)].status", contains("APPROVED")))
+            .andExpect(jsonPath("$.applications[?(@.applicantId == $cId)].status", contains("REJECTED")))
+    }
+
+    @Test
+    fun myPayrollEndpointPreservesSummaryAndRejectsInvalidMonth() {
+        val token = loginAs("employee@ptmanager.test")
+        mockMvc.perform(get("/api/payroll/me?yearMonth=2020-01")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $token"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.yearMonth", `is`("2020-01")))
+            .andExpect(jsonPath("$.workedMinutes", `is`(0)))
+            .andExpect(jsonPath("$.amount", `is`(0)))
+            .andExpect(jsonPath("$.weeks.length()", `is`(4)))
+        mockMvc.perform(get("/api/payroll/me?yearMonth=invalid")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $token"))
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code", `is`("BAD_REQUEST")))
+    }
+
+    @Test
+    fun attachmentUploadPreservesResponseAndEmployerOnlyAccess() {
+        val file = MockMultipartFile("file", "note.txt", "text/plain", "handover".toByteArray())
+        val employer = loginAs("employer@ptmanager.test")
+        mockMvc.perform(multipart("/api/notices/attachments").file(file)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $employer"))
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.fileUrl").isString)
+            .andExpect(jsonPath("$.noticeId", `is`(0)))
+            .andExpect(jsonPath("$.createdAt").exists())
+        val employee = loginAs("employee@ptmanager.test")
+        mockMvc.perform(multipart("/api/notices/attachments").file(file)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $employee"))
+            .andExpect(status().isForbidden)
+    }
+
+    private companion object {
+        // 다른 테스트의 발급 기록과 섞이지 않도록 이 테스트 전용 매장 id를 쓴다.
+        const val QR_TEST_WORKPLACE = 9001L
     }
 }

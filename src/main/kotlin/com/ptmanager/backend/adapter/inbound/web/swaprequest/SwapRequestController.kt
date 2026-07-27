@@ -1,0 +1,69 @@
+package com.ptmanager.backend.adapter.inbound.web.swaprequest
+
+import com.ptmanager.backend.application.swaprequest.*
+
+import com.ptmanager.backend.domain.SwapRequestStatus
+import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
+import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
+
+@RestController
+@RequestMapping("/api/swap-requests")
+class SwapRequestController(
+    private val swapRequestService: SwapRequestService,
+) {
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun createSwapRequest(
+        @AuthenticationPrincipal userId: Long,
+        @Valid @RequestBody request: CreateSwapRequest,
+    ): SwapRequestResponse =
+        SwapRequestResponse.from(swapRequestService.createSwapRequest(userId, request.shiftId, request.reason))
+
+    @GetMapping
+    fun findSwapRequests(
+        @AuthenticationPrincipal userId: Long,
+        @RequestParam workplaceId: Long,
+        @RequestParam view: String,
+        @RequestParam(required = false) status: SwapRequestStatus?,
+    ): List<SwapRequestResponse> =
+        swapRequestService.findSwapRequests(workplaceId, view, userId, status).map(SwapRequestResponse::from)
+
+    @GetMapping("/{swapRequestId}")
+    fun getDetail(@PathVariable swapRequestId: Long): SwapRequestDetail =
+        swapRequestService.getDetail(swapRequestId)
+
+    @PostMapping("/{swapRequestId}/applications")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun apply(
+        @AuthenticationPrincipal userId: Long,
+        @PathVariable swapRequestId: Long,
+    ): SwapApplicationResponse = swapRequestService.apply(swapRequestId, userId)
+
+    @GetMapping("/{swapRequestId}/applications")
+    @PreAuthorize("hasRole('EMPLOYER')")
+    fun listApplications(@PathVariable swapRequestId: Long): List<SwapApplicationResponse> =
+        swapRequestService.listApplications(swapRequestId)
+
+    @PostMapping("/{swapRequestId}/approve")
+    @PreAuthorize("hasRole('EMPLOYER')")
+    fun approve(
+        @PathVariable swapRequestId: Long,
+        @Valid @RequestBody request: ApproveSwapRequest,
+    ): SwapRequestResponse = SwapRequestResponse.from(swapRequestService.approve(swapRequestId, request.applicantId))
+
+    @PostMapping("/{swapRequestId}/reject")
+    @PreAuthorize("hasRole('EMPLOYER')")
+    fun reject(@PathVariable swapRequestId: Long): SwapRequestResponse =
+        SwapRequestResponse.from(swapRequestService.reject(swapRequestId))
+}
