@@ -2,10 +2,20 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,9 +27,6 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
       - name: Build & test (H2 in-memory)
         run: ./gradlew build --no-daemon
 
@@ -27,6 +34,7 @@ jobs:
   # SQL 마이그레이션 자체는 검증되지 않으므로, 여기서 실제 Postgres에 적용해 문법·순서를 확인한다.
   migrations:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16

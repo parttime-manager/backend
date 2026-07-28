@@ -1,44 +1,32 @@
 # PTManager Backend
 
+## 소개
+
 직원·사장 Android 앱이 근무 스케줄·대타·근태·매장 데이터를 공유하는 REST API 서버입니다.
 
 ## 기술 스택
 
-Kotlin · Spring Boot · Spring Data JPA · Spring Security · H2 / PostgreSQL · Flyway · JWT · FCM · S3
+Kotlin · Spring Boot · Spring Data JPA · Spring Security · H2 / PostgreSQL · Flyway · JWT · FCM · S3 ([build.gradle.kts](build.gradle.kts))
 
-의존성은 [build.gradle.kts](build.gradle.kts)에서 관리합니다.
+### 아키텍처
+
+헥사고날·클린 아키텍처를 사용하며 경계는 [기술 구조](https://github.com/parttime-manager/.github/blob/main/03-tech/01-architecture.md#아키텍처와-경계)를 따릅니다.
 
 ## 시작하기
 
-### 사전 요구사항
-
-JDK 21이 필요합니다. `JAVA_HOME`이 해당 JDK를 가리키도록 설정합니다. Android Studio의 번들 JBR도 사용할 수 있습니다.
-
-### 실행
-
-저장소 루트에서 실행합니다.
+JDK 21(`JAVA_HOME`)을 준비하고 저장소 루트에서 실행합니다(Windows는 `.\gradlew`). 기본 로컬 설정은 H2 인메모리 DB를 사용하며 운영 설정은 [배포 가이드](https://github.com/parttime-manager/.github/blob/main/05-ops/01-deploy.md)를 따릅니다.
 
 ```bash
 ./gradlew bootRun
 ```
 
-Windows PowerShell에서는 `./gradlew` 대신 `.\gradlew`를 사용합니다.
-로컬 설정은 H2 인메모리 DB를 사용하므로 별도 DB 설치가 필요하지 않습니다.
-
 ## 사용 방법
 
-### 로컬 접속
-
-| 대상 | 주소 |
-| --- | --- |
-| API | `http://localhost:8080` |
-| Android 에뮬레이터에서 API | `http://10.0.2.2:8080` |
-| Swagger UI | `http://localhost:8080/swagger-ui.html` |
-| OpenAPI | `http://localhost:8080/v3/api-docs` |
-| H2 콘솔 | `http://localhost:8080/h2-console` |
-
-H2 콘솔의 JDBC URL은 `jdbc:h2:mem:ptmanager`, 사용자는 `sa`입니다.
-보호된 API는 로그인으로 받은 `accessToken`을 Swagger의 **Authorize**에 입력해 호출합니다.
+| 대상 | 주소 | 비고 |
+| --- | --- | --- |
+| API / 에뮬레이터 | `http://localhost:8080` / `http://10.0.2.2:8080` | [bruno](bruno) 컬렉션 지원 |
+| Scalar / OpenAPI | `http://localhost:8080/docs` / `/v3/api-docs` | Bearer `accessToken` 입력 |
+| H2 콘솔 | `http://localhost:8080/h2-console` | `jdbc:h2:mem:ptmanager`, 사용자 `sa`, 비밀번호 빈 값 |
 
 ```bash
 curl http://localhost:8080/actuator/health
@@ -49,18 +37,13 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 ### 데모 계정
 
-로컬 DB는 재시작할 때 초기화됩니다. 사용자 테이블이 비어 있으면 [DataSeeder](src/main/kotlin/com/ptmanager/backend/config/DataSeeder.kt)가 샘플을 생성합니다.
-비밀번호는 모두 `password`, 시드 매장 초대코드는 `CAFE01`입니다.
+로컬 기동 시 사용자 테이블이 비어 있으면 [DataSeeder](src/main/kotlin/com/ptmanager/backend/configuration/DataSeeder.kt)가 샘플 데이터를 생성합니다(비밀번호 공통 `password`, 초대코드 `CAFE01`).
 
 | 계정 | 역할 | 매장 |
 | --- | --- | --- |
 | `employer@ptmanager.test` | 사장 | PT Manager Cafe |
-| `employee@ptmanager.test` | 직원 | PT Manager Cafe |
-| `employee2@ptmanager.test` | 직원 | PT Manager Cafe |
-| `employee3@ptmanager.test` | 직원 | PT Manager Cafe |
+| `employee@ptmanager.test`, `employee2@...`, `employee3@...` | 직원 | PT Manager Cafe |
 | `applicant@ptmanager.test` | 직원 | 미소속·가입 신청 대기 |
-
-근무·근태·공지·인수인계·대타·알림 샘플도 함께 생성됩니다. 샘플 구성은 `DataSeeder`에서 관리합니다.
 
 ## 테스트
 
@@ -68,12 +51,8 @@ curl -X POST http://localhost:8080/api/auth/login \
 ./gradlew test
 ```
 
-자동 검증 설정은 [CI 워크플로](.github/workflows/ci.yml)를 참고합니다.
+CI 설정은 [CI 워크플로](.github/workflows/ci.yml)를 따릅니다.
 
 ## 관련 문서
 
-| 문서 | 내용 |
-| --- | --- |
-| [프로젝트 문서](https://github.com/PTManager/docs#관련-문서) | 요구사항·설계·작업 현황·배포 안내 |
-| [직원 앱](https://github.com/PTManager/EmployeeApp) | 직원 앱 설정·빌드·사용 |
-| [사장 앱](https://github.com/PTManager/EmployerApp) | 사장 앱 설정·빌드·사용 |
+- [프로젝트 문서](https://github.com/parttime-manager/.github#관련-문서) · [업무 규칙](https://github.com/parttime-manager/.github/blob/main/01-func/01-requirements.md#업무-규칙) · [데이터 모델](https://github.com/parttime-manager/.github/blob/main/03-tech/02-data-model.md) · [Android](https://github.com/parttime-manager/android-app)

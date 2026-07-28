@@ -1,0 +1,68 @@
+package com.ptmanager.backend.application.shift
+
+
+import com.ptmanager.backend.domain.AttendanceStatus
+import com.ptmanager.backend.domain.Shift
+import jakarta.validation.constraints.NotBlank
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+
+data class CreateShiftRequest(
+    val workplaceId: Long,
+    val employeeId: Long,
+    val workDate: LocalDate,
+    val startTime: LocalTime,
+    val endTime: LocalTime,
+)
+
+data class UpdateShiftRequest(
+    val employeeId: Long? = null,
+    val workDate: LocalDate? = null,
+    val startTime: LocalTime? = null,
+    val endTime: LocalTime? = null,
+)
+
+data class CheckInRequest(
+    @field:NotBlank val qrToken: String,
+)
+
+/** 근무 응답. 명세 Shift 스키마대로 근무자 표시명(employeeName)을 포함한다. */
+data class ShiftResponse(
+    val id: Long?,
+    val workplaceId: Long,
+    val employeeId: Long,
+    val employeeName: String?,
+    val workDate: LocalDate,
+    val startTime: LocalTime,
+    val endTime: LocalTime,
+    val checkedInAt: Instant?,
+    val checkedOutAt: Instant?,
+    val attendanceStatus: AttendanceStatus,
+    val published: Boolean,
+    val createdAt: Instant?,
+    val updatedAt: Instant?,
+    // 상세 조회(getShiftDetail)에서만 채운다. 목록 응답에서는 null.
+    val workplaceName: String? = null,
+    val coworkers: List<String>? = null,
+    val estimatedPay: Int? = null,
+) {
+    companion object {
+        /** employeeName은 호출부가 조회해 넘긴다 (Shift에 없는 표시용 필드). */
+        fun from(shift: Shift, employeeName: String?) = ShiftResponse(
+            id = shift.id,
+            workplaceId = shift.workplaceId,
+            employeeId = shift.employeeId,
+            employeeName = employeeName,
+            workDate = shift.workDate,
+            startTime = shift.startTime,
+            endTime = shift.endTime,
+            checkedInAt = shift.checkedInAt,
+            checkedOutAt = shift.checkedOutAt,
+            attendanceStatus = shift.attendanceStatus,
+            published = shift.published,
+            createdAt = shift.createdAt,
+            updatedAt = shift.updatedAt,
+        )
+    }
+}

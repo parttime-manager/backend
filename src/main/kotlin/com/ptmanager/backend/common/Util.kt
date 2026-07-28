@@ -1,6 +1,6 @@
 package com.ptmanager.backend.common
 
-import com.ptmanager.backend.repository.UserRepository
+import com.ptmanager.backend.application.port.out.UserRepository
 import java.time.LocalTime
 import java.util.Optional
 
